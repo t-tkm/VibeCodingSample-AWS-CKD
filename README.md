@@ -139,12 +139,26 @@ source .venv/bin/activate  # Linuxの場合
 pip install -r requirements.txt
 ```
 
-3. （オプション）AWS リージョンを設定
+3. （オプション）AWS認証情報を設定
+   通常はAWS CLIで認証情報が設定されていますが、一時的な認証情報や異なるプロファイルを使用する場合は、以下の環境変数を設定できます：
+
+```bash
+export AWS_ACCESS_KEY_ID="<アクセスキーID>"
+export AWS_SECRET_ACCESS_KEY="<シークレットアクセスキー>"
+export AWS_SESSION_TOKEN="<セッショントークン>"
+```
+
+   **注意:** 上記はプレースホルダーです。実際の認証情報は以下の方法で取得してください：
+   - AWS IAM Identity Center (SSO)
+   - AWS STS (Security Token Service)
+   - IAMユーザーのアクセスキー
+
+4. （オプション）AWS リージョンを設定
 ```
 export AWS_DEFAULT_REGION=ap-northeast-1
 ```
 
-4. CDKをデプロイ
+5. CDKをデプロイ
 ```
 cdk deploy
 ```
