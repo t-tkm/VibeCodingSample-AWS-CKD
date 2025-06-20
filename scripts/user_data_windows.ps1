@@ -18,9 +18,24 @@ Set-TimeZone -Id "Tokyo Standard Time"
 Set-ExecutionPolicy Unrestricted -Force
 
 # 管理者パスワードの設定
-$Password = ConvertTo-SecureString 'P@ssw0rd123!' -AsPlainText -Force
+# Administratorアカウントを有効化
+net user Administrator /active:yes
+
+# より強固なパスワードを設定
+$Password = ConvertTo-SecureString 'Admin@2024#Secure' -AsPlainText -Force
 $UserAccount = Get-LocalUser -Name 'Administrator'
-$UserAccount | Set-LocalUser -Password $Password
+$UserAccount | Set-LocalUser -Password $Password -PasswordNeverExpires $true
+
+# パスワード要件を緩和（必要に応じて）
+secedit /export /cfg c:\secpol.cfg
+(gc C:\secpol.cfg).replace("PasswordComplexity = 1", "PasswordComplexity = 0") | Out-File C:\secpol.cfg
+secedit /configure /db c:\windows\security\local.sdb /cfg c:\secpol.cfg /areas SECURITYPOLICY
+rm -force c:\secpol.cfg -confirm:$false
+
+# RDP接続を有効化
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
 
 # 必要な機能のインストール
 Install-WindowsFeature -Name Web-Server -IncludeManagementTools
