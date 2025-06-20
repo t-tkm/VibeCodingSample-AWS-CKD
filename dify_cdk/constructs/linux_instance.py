@@ -138,12 +138,25 @@ class LinuxInstanceConstruct(Construct):
                 "apt-get upgrade -y",
                 
                 # 必要なパッケージのインストール
-                "apt-get install -y apt-transport-https ca-certificates curl software-properties-common",
+                "apt-get install -y apt-transport-https ca-certificates curl software-properties-common git",
                 
                 # ユーザーの作成
                 "useradd -m -s /bin/bash dify",
                 "echo 'dify:P@ssw0rd123!' | chpasswd",
                 "usermod -aG sudo dify",
+                
+                # asdfのインストール
+                "sudo -u dify bash -c 'git clone https://github.com/asdf-vm/asdf.git /home/dify/.asdf --branch v0.13.1'",
+                "sudo -u dify bash -c 'echo \". /home/dify/.asdf/asdf.sh\" >> /home/dify/.bashrc'",
+                "sudo -u dify bash -c 'echo \". /home/dify/.asdf/completions/asdf.bash\" >> /home/dify/.bashrc'",
+                
+                # Node.js 22のインストールに必要な依存関係をインストール
+                "apt-get install -y dirmngr gpg curl gawk",
+                
+                # asdfプラグインの追加とNode.js 22のインストール
+                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git'",
+                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf install nodejs 22.1.0'",
+                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf global nodejs 22.1.0'",
                 
                 # Dockerのインストール
                 "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -",
