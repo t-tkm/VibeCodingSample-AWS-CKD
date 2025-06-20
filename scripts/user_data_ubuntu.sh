@@ -1,5 +1,5 @@
 #!/bin/bash
-# Ubuntu VM 初期化スクリプト
+# Difyインストール用Ubuntuユーザーデータスクリプト
 
 # エラー時に停止
 set -e
@@ -8,11 +8,11 @@ set -e
 LOGFILE="/var/log/user-data.log"
 exec > >(tee -a ${LOGFILE}) 2>&1
 
-echo "Starting Ubuntu VM initialization script at $(date)"
+echo "Starting Dify installation script at $(date)"
 
 # システムの更新
 echo "Updating system packages..."
-apt-get update
+apt-get update -y
 apt-get upgrade -y
 
 # 必要なパッケージのインストール
@@ -21,7 +21,6 @@ apt-get install -y \
     apt-transport-https \
     ca-certificates \
     curl \
-    software-properties-common \
     gnupg \
     lsb-release \
     git \
@@ -30,180 +29,171 @@ apt-get install -y \
     net-tools \
     unzip
 
-# ユーザーの作成
-echo "Creating dify user..."
-useradd -m -s /bin/bash dify
-echo 'dify:P@ssw0rd123!' | chpasswd
-usermod -aG sudo dify
-
 # Dockerのインストール
 echo "Installing Docker..."
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-usermod -aG docker dify
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# SSMエージェントのインストール
-echo "Installing SSM Agent..."
-mkdir -p /tmp/ssm
-cd /tmp/ssm
-wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
-dpkg -i amazon-ssm-agent.deb
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+# Dockerを開始し有効化
+systemctl start docker
+systemctl enable docker
 
-# Difyのインストールディレクトリの作成
+# ubuntuユーザーをdockerグループに追加
+usermod -aG docker ubuntu
+
+# ubuntuユーザーのパスワード設定
+echo 'ubuntu:P@ssw0rd123!' | chpasswd
+echo "Ubuntu user password has been set."
+
+# SSMエージェントのインストール - AMIに既に設定済みのためコメントアウト
+# echo "Checking and installing SSM Agent..."
+# # snapコマンドでSSMエージェントがインストール済みか確認
+# if snap list amazon-ssm-agent &>/dev/null; then
+#     echo "SSM Agent is already installed via snap. Skipping installation."
+# else
+#     # debパッケージでインストールを試みる
+#     mkdir -p /tmp/ssm
+#     cd /tmp/ssm
+#     wget https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/debian_amd64/amazon-ssm-agent.deb
+#     # エラーが発生しても続行するために set +e を使用
+#     set +e
+#     dpkg -i amazon-ssm-agent.deb
+#     set -e
+#     # サービスの有効化と開始を試みる
+#     systemctl enable amazon-ssm-agent || true
+#     systemctl start amazon-ssm-agent || true
+# fi
+
+# Dify用ディレクトリを作成
 echo "Creating Dify installation directory..."
-mkdir -p /opt/dify/docker
-chown -R dify:dify /opt/dify
+mkdir -p /opt/dify
+cd /opt/dify
 
-# Docker Composeファイルの作成
-echo "Creating Docker Compose configuration..."
-cat > /opt/dify/docker/docker-compose.yml << 'EOL'
+# Difyリポジトリをクローン
+echo "Cloning Dify repository..."
+git clone https://github.com/langgenius/dify.git .
+
+# docker用ディレクトリを作成
+mkdir -p /opt/dify/docker
+cd docker
+
+# docker-composeファイルをdockerディレクトリにコピー
+cp docker-compose.yaml /opt/dify/docker/
+cp -r volumes /opt/dify/docker/
+cp -r nginx /opt/dify/docker/
+
+# dockerディレクトリに移動
+cd /opt/dify/docker
+
+# カスタム設定でdocker-compose.override.ymlを作成
+echo "Creating Docker Compose override configuration..."
+cat > docker-compose.override.yml << 'EOF'
 version: '3'
 services:
+  # APIサービス
   api:
-    image: langgenius/dify-api:latest
-    restart: always
     environment:
-      - CONSOLE_API_URL=http://localhost:5001
-      - CONSOLE_WEB_URL=http://localhost:3000
-    volumes:
-      - ./data:/app/api/storage
-    depends_on:
-      - db
-      - redis
+      - SECRET_KEY=sk-9f73s3ljTXVcMT3Blb3ljTqtsKiGHXVcMT3BlbkFJLK7U
+      - CONSOLE_WEB_URL=http://localhost
+      - CONSOLE_API_URL=http://localhost
+      - SERVICE_API_URL=http://localhost
+      - APP_WEB_URL=http://localhost
+      - FILES_URL=http://localhost
+      - STORAGE_TYPE=local
+      - STORAGE_LOCAL_PATH=/app/api/storage
+    restart: unless-stopped
+
+  # ワーカーサービス
   worker:
-    image: langgenius/dify-api:latest
-    restart: always
-    command: celery -A app.celery worker -l info
     environment:
-      - CONSOLE_API_URL=http://localhost:5001
-      - CONSOLE_WEB_URL=http://localhost:3000
-    volumes:
-      - ./data:/app/api/storage
-    depends_on:
-      - db
-      - redis
+      - STORAGE_TYPE=local
+      - STORAGE_LOCAL_PATH=/app/api/storage
+    restart: unless-stopped
+
+  # Webサービス
   web:
-    image: langgenius/dify-web:latest
-    restart: always
-    environment:
-      - CONSOLE_API_URL=http://localhost:5001
-    depends_on:
-      - api
+    restart: unless-stopped
+
+  # データベース
   db:
-    image: postgres:15
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=dify
+    restart: unless-stopped
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+
+  # Redis
   redis:
-    image: redis:6
-    restart: always
+    restart: unless-stopped
     volumes:
-      - ./data/redis:/data
+      - redis_data:/data
+
+  # Weaviate
   weaviate:
-    image: semitechnologies/weaviate:1.19.6
-    restart: always
-    volumes:
-      - ./data/weaviate:/var/lib/weaviate
-    environment:
-      - QUERY_DEFAULTS_LIMIT=20
-      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
-      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
-      - DEFAULT_VECTORIZER_MODULE=none
-      - ENABLE_MODULES=text2vec-openai
-      - CLUSTER_HOSTNAME=node1
+    restart: unless-stopped
+
+  # Nginxリバースプロキシ
   nginx:
-    image: nginx:latest
-    restart: always
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - api
-      - web
-EOL
+    restart: unless-stopped
 
-# Nginxの設定ファイルの作成
-echo "Creating Nginx configuration..."
-cat > /opt/dify/docker/nginx.conf << 'EOL'
-server {
-    listen 80;
-    server_name localhost;
+volumes:
+  db_data:
+  redis_data:
+EOF
 
-    location / {
-        proxy_pass http://web:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
+# 適切な権限を設定
+chown -R ubuntu:ubuntu /opt/dify
 
-    location /api/ {
-        proxy_pass http://api:5001/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-EOL
-
-# Docker Compose Override ファイルの作成
-echo "Creating Docker Compose override configuration..."
-cat > /opt/dify/docker/docker-compose.override.yml << 'EOL'
-version: '3'
-services:
-  api:
-    environment:
-      - CONSOLE_API_URL=http://localhost/api
-      - CONSOLE_WEB_URL=http://localhost
-  worker:
-    environment:
-      - CONSOLE_API_URL=http://localhost/api
-      - CONSOLE_WEB_URL=http://localhost
-  web:
-    environment:
-      - CONSOLE_API_URL=http://localhost/api
-EOL
-
-# 起動スクリプトの作成
-echo "Creating startup script..."
-cat > /opt/dify/start.sh << 'EOL'
-#!/bin/bash
-cd /opt/dify/docker
-docker compose up -d
-EOL
-
-chmod +x /opt/dify/start.sh
-chown dify:dify /opt/dify/start.sh
-
-# 自動起動の設定
+# Dify用systemdサービスを作成
 echo "Setting up auto-start service..."
-cat > /etc/systemd/system/dify.service << 'EOL'
+cat > /etc/systemd/system/dify.service << 'EOF'
 [Unit]
-Description=Dify AI Application
-After=docker.service
+Description=Dify Application
 Requires=docker.service
+After=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/dify
-ExecStart=/opt/dify/start.sh
-User=dify
-Group=dify
+WorkingDirectory=/opt/dify/docker
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=0
+# rootユーザーで実行（Dockerへのアクセス権限の問題を回避）
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
-EOL
+EOF
 
+# Difyサービスを有効化し開始
 systemctl daemon-reload
 systemctl enable dify.service
+
+# Dockerが完全に準備できるまで待機
+sleep 30
+
+# Difyを開始
 systemctl start dify.service
+
+# 簡単なステータス確認スクリプトを作成
+echo "Creating status check script..."
+cat > /opt/dify/check_status.sh << 'EOF'
+#!/bin/bash
+echo "Difyサービスステータス:"
+systemctl status dify.service --no-pager
+
+echo -e "\nDockerコンテナ:"
+cd /opt/dify/docker && docker compose ps
+
+echo -e "\nDifyアプリケーションURL:"
+echo "http://$(hostname -I | awk '{print $1}')"
+EOF
+
+chmod +x /opt/dify/check_status.sh
 
 # ファイアウォールの設定
 echo "Configuring firewall..."
@@ -212,4 +202,9 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 echo "y" | ufw enable
 
-echo "Ubuntu VM initialization completed successfully at $(date)"
+# 完了をログに記録
+echo "Difyのインストールが正常に完了しました！" > /var/log/dify-setup.log
+echo "インストール完了時刻: $(date)" >> /var/log/dify-setup.log
+echo "Difyアクセス先: http://$(hostname -I | awk '{print $1}')" >> /var/log/dify-setup.log
+
+echo "Dify installation completed successfully at $(date)"

@@ -148,8 +148,35 @@ cdk deploy
 4. Linux VMでは、Difyが `/opt/dify/docker` ディレクトリにインストールされ、自動的に起動
 5. Windows VMからブラウザを使用して、Linux VMのプライベートIPアドレスにアクセスしてDifyを利用
 
+## VMパスワードの変更方法
+
+### Windows VMのパスワード変更
+
+Windows VMのAdministratorパスワードを変更するには、以下の手順で`scripts/user_data_windows.ps1`ファイルを編集します：
+
+```powershell
+# 管理者パスワードの設定
+$Password = ConvertTo-SecureString '新しいパスワード' -AsPlainText -Force
+$UserAccount = Get-LocalUser -Name 'Administrator'
+$UserAccount | Set-LocalUser -Password $Password
+```
+
+`'新しいパスワード'`の部分を、希望するパスワードに変更してください。パスワードは複雑さの要件（大文字、小文字、数字、特殊文字を含む）を満たす必要があります。
+
+### Linux VMのパスワード変更
+
+Linux VMでは、初期設定で`ubuntu`ユーザーがデフォルトで使用されます。パスワードを設定するには、`scripts/user_data_ubuntu.sh`ファイルに以下の行を追加します：
+
+```bash
+# ubuntuユーザーのパスワード設定
+echo 'ubuntu:新しいパスワード' | chpasswd
+```
+
+この行を`# ubuntuユーザーをdockerグループに追加`の行の後に追加することをお勧めします。
+
 ## 注意事項
 
 - このインフラストラクチャは、インターネットからの直接アクセスを許可していません
 - Difyへのアクセスは、VPC内のリソースからのみ可能です
 - 複数環境のデプロイには、`cdk.context.json`ファイルでスタック名やタグを変更してください
+- パスワードはソースコードに平文で保存されるため、本番環境では適切なシークレット管理を検討してください
