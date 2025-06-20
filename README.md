@@ -5,6 +5,7 @@
 ## アーキテクチャ
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
 graph LR
     subgraph AWS["AWS Cloud"]
         subgraph VPC["VPC"]
@@ -29,11 +30,12 @@ graph LR
     SSMEndpoint -->|"RDP/SSH"| LinuxVM
     WinVM -->|"HTTP (80)"| LinuxVM
     
-    classDef aws fill:#FF9900,stroke:#232F3E,color:white;
-    classDef vpc fill:#F58536,stroke:#232F3E,color:white;
-    classDef subnet fill:#4D27AA,stroke:#232F3E,color:white;
-    classDef vm fill:#1A73E8,stroke:#232F3E,color:white;
-    classDef user fill:#7D8487,stroke:#232F3E,color:white;
+    classDef default fill:#e0e0e0,stroke:#666,color:#333
+    classDef aws fill:#d0d0d0,stroke:#666,color:#333
+    classDef vpc fill:#c0c0c0,stroke:#666,color:#333
+    classDef subnet fill:#b0b0b0,stroke:#666,color:#333
+    classDef vm fill:#a0a0a0,stroke:#666,color:#333
+    classDef user fill:#909090,stroke:#666,color:#333
     
     class AWS,SSM aws;
     class VPC vpc;
@@ -50,6 +52,7 @@ graph LR
 ### Difyコンテナ構成
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
 graph TD
     subgraph DockerCompose["Docker Compose環境"]
         Nginx["Nginx\nリバースプロキシ\nポート: 80"]
@@ -74,11 +77,12 @@ graph TD
     Worker --> Weaviate
     Web --> API
     
-    classDef container fill:#1A73E8,stroke:#232F3E,color:white;
-    classDef db fill:#34A853,stroke:#232F3E,color:white;
-    classDef cache fill:#FBBC05,stroke:#232F3E,color:white;
-    classDef proxy fill:#EA4335,stroke:#232F3E,color:white;
-    classDef user fill:#7D8487,stroke:#232F3E,color:white;
+    classDef default fill:#e0e0e0,stroke:#666,color:#333
+    classDef container fill:#c0c0c0,stroke:#666,color:#333
+    classDef db fill:#b0b0b0,stroke:#666,color:#333
+    classDef cache fill:#a0a0a0,stroke:#666,color:#333
+    classDef proxy fill:#909090,stroke:#666,color:#333
+    classDef user fill:#808080,stroke:#666,color:#333
     
     class API,Worker,Web container;
     class DB,Weaviate db;
