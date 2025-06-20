@@ -44,7 +44,7 @@ graph LR
 
 ## 構成
 
-- Windows Server: 管理用、Linux Serverを管理するサーバ。ブラウザでDifyへアクセス。
+- Windows Server: 管理用、Linux Serverを管理するサーバ。ブラウザでDifyへアクセス。**日本語版Windows Server 2022を使用。**
 - Linux Server: Ubuntu 22.04、Difyが起動。Docker Composeを使用して複数のコンテナを実行。
 
 ### Difyコンテナ構成
@@ -135,7 +135,12 @@ source .venv/bin/activate  # Linuxの場合
 pip install -r requirements.txt
 ```
 
-3. CDKをデプロイ
+3. （オプション）AWS リージョンを設定
+```
+export AWS_DEFAULT_REGION=ap-northeast-1
+```
+
+4. CDKをデプロイ
 ```
 cdk deploy
 ```
