@@ -16,7 +16,6 @@ setuptools.setup(
         "aws-cdk-lib>=2.0.0",
         "constructs>=10.0.0",
         "aws-cdk.aws-ec2-alpha>=2.0.0a0",
-        "aws-cdk.aws-ssm-alpha>=2.0.0a0",
     ],
     python_requires=">=3.8",
     classifiers=[
