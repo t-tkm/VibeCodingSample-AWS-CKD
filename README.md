@@ -2,94 +2,15 @@
 
 このプロジェクトは、AWS CDKを使用してDifyアプリケーションを実行するためのインフラストラクチャをデプロイします。
 
-## アーキテクチャ
+## 概要
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
-graph LR
-    subgraph AWS["AWS Cloud"]
-        subgraph VPC["VPC"]
-            subgraph PrivateSubnet["プライベートサブネット"]
-                WinVM["Windows VM\n管理用サーバー"]
-                LinuxVM["Linux VM\nUbuntu 22.04\nDify実行環境"]
-            end
-            
-            subgraph PublicSubnet["パブリックサブネット"]
-                SSMEndpoint["SSM\nエンドポイント"]
-            end
-        end
-        
-        SSM["AWS Systems Manager\n(Fleet Manager)"]
-    end
-    
-    User["ユーザー"]
-    
-    User -->|"AWS Management\nConsole"| SSM
-    SSM -->|"セキュアな接続"| SSMEndpoint
-    SSMEndpoint -->|"RDP/SSH"| WinVM
-    SSMEndpoint -->|"RDP/SSH"| LinuxVM
-    WinVM -->|"HTTP (80)"| LinuxVM
-    
-    classDef default fill:#e0e0e0,stroke:#666,color:#333
-    classDef aws fill:#d0d0d0,stroke:#666,color:#333
-    classDef vpc fill:#c0c0c0,stroke:#666,color:#333
-    classDef subnet fill:#b0b0b0,stroke:#666,color:#333
-    classDef vm fill:#a0a0a0,stroke:#666,color:#333
-    classDef user fill:#909090,stroke:#666,color:#333
-    
-    class AWS,SSM aws;
-    class VPC vpc;
-    class PrivateSubnet,PublicSubnet subnet;
-    class WinVM,LinuxVM,SSMEndpoint vm;
-    class User user;
-```
+このプロジェクトでは、以下の構成でDifyアプリケーションをAWS上にデプロイします：
 
-## 構成
+- **Windows Server**: 管理用サーバー（日本語版Windows Server 2022）
+- **Linux Server**: Dify実行環境（Ubuntu 22.04、Docker Compose使用）
+- **セキュアアクセス**: AWS Systems Manager Fleet Managerを使用したVPC内接続
 
-- Windows Server: 管理用、Linux Serverを管理するサーバ。ブラウザでDifyへアクセス。**日本語版Windows Server 2022を使用。**
-- Linux Server: Ubuntu 22.04、Difyが起動。Docker Composeを使用して複数のコンテナを実行。
-
-### Difyコンテナ構成
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
-graph TD
-    subgraph DockerCompose["Docker Compose環境"]
-        Nginx["Nginx\nリバースプロキシ\nポート: 80"]
-        API["API\nDify APIサーバー"]
-        Worker["Worker\nCeleryワーカー"]
-        Web["Web\nDifyフロントエンド"]
-        DB["PostgreSQL\nデータベース"]
-        Redis["Redis\nキャッシュ"]
-        Weaviate["Weaviate\nベクトルデータベース"]
-    end
-    
-    User["Windows VM\nブラウザ"]
-    
-    User -->|"HTTP (80)"| Nginx
-    Nginx -->|"/"| Web
-    Nginx -->|"/api/"| API
-    API --> DB
-    API --> Redis
-    API --> Weaviate
-    Worker --> DB
-    Worker --> Redis
-    Worker --> Weaviate
-    Web --> API
-    
-    classDef default fill:#e0e0e0,stroke:#666,color:#333
-    classDef container fill:#c0c0c0,stroke:#666,color:#333
-    classDef db fill:#b0b0b0,stroke:#666,color:#333
-    classDef cache fill:#a0a0a0,stroke:#666,color:#333
-    classDef proxy fill:#909090,stroke:#666,color:#333
-    classDef user fill:#808080,stroke:#666,color:#333
-    
-    class API,Worker,Web container;
-    class DB,Weaviate db;
-    class Redis cache;
-    class Nginx proxy;
-    class User user;
-```
+詳細なアーキテクチャ図については、[付録](#付録)をご参照ください。
 
 ## ディレクトリ構造
 
@@ -203,3 +124,89 @@ echo 'ubuntu:新しいパスワード' | chpasswd
 - Difyへのアクセスは、VPC内のリソースからのみ可能です
 - 複数環境のデプロイには、`cdk.context.json`ファイルでスタック名やタグを変更してください
 - パスワードはソースコードに平文で保存されるため、本番環境では適切なシークレット管理を検討してください
+
+## 付録
+
+### AWSアーキテクチャ図
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
+graph LR
+    subgraph AWS["AWS Cloud"]
+        subgraph VPC["VPC"]
+            subgraph PrivateSubnet["プライベートサブネット"]
+                WinVM["Windows VM\n管理用サーバー"]
+                LinuxVM["Linux VM\nUbuntu 22.04\nDify実行環境"]
+            end
+            
+            subgraph PublicSubnet["パブリックサブネット"]
+                SSMEndpoint["SSM\nエンドポイント"]
+            end
+        end
+        
+        SSM["AWS Systems Manager\n(Fleet Manager)"]
+    end
+    
+    User["ユーザー"]
+    
+    User -->|"AWS Management\nConsole"| SSM
+    SSM -->|"セキュアな接続"| SSMEndpoint
+    SSMEndpoint -->|"RDP/SSH"| WinVM
+    SSMEndpoint -->|"RDP/SSH"| LinuxVM
+    WinVM -->|"HTTP (80)"| LinuxVM
+    
+    classDef default fill:#e0e0e0,stroke:#666,color:#333
+    classDef aws fill:#d0d0d0,stroke:#666,color:#333
+    classDef vpc fill:#c0c0c0,stroke:#666,color:#333
+    classDef subnet fill:#b0b0b0,stroke:#666,color:#333
+    classDef vm fill:#a0a0a0,stroke:#666,color:#333
+    classDef user fill:#909090,stroke:#666,color:#333
+    
+    class AWS,SSM aws;
+    class VPC vpc;
+    class PrivateSubnet,PublicSubnet subnet;
+    class WinVM,LinuxVM,SSMEndpoint vm;
+    class User user;
+```
+
+### Difyコンテナ構成図
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
+graph TD
+    subgraph DockerCompose["Docker Compose環境"]
+        Nginx["Nginx\nリバースプロキシ\nポート: 80"]
+        API["API\nDify APIサーバー"]
+        Worker["Worker\nCeleryワーカー"]
+        Web["Web\nDifyフロントエンド"]
+        DB["PostgreSQL\nデータベース"]
+        Redis["Redis\nキャッシュ"]
+        Weaviate["Weaviate\nベクトルデータベース"]
+    end
+    
+    User["Windows VM\nブラウザ"]
+    
+    User -->|"HTTP (80)"| Nginx
+    Nginx -->|"/"| Web
+    Nginx -->|"/api/"| API
+    API --> DB
+    API --> Redis
+    API --> Weaviate
+    Worker --> DB
+    Worker --> Redis
+    Worker --> Weaviate
+    Web --> API
+    
+    classDef default fill:#e0e0e0,stroke:#666,color:#333
+    classDef container fill:#c0c0c0,stroke:#666,color:#333
+    classDef db fill:#b0b0b0,stroke:#666,color:#333
+    classDef cache fill:#a0a0a0,stroke:#666,color:#333
+    classDef proxy fill:#909090,stroke:#666,color:#333
+    classDef user fill:#808080,stroke:#666,color:#333
+    
+    class API,Worker,Web container;
+    class DB,Weaviate db;
+    class Redis cache;
+    class Nginx proxy;
+    class User user;
+```
