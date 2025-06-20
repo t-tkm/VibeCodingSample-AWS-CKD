@@ -13,9 +13,19 @@ STACK_NAME = f"{APP_NAME}-{ENV_NAME}"
 
 app = cdk.App()
 
+# 環境設定（AWS アカウントとリージョン）
+# 実際のデプロイ時には、これらの値を適切に設定する必要があります
+AWS_ACCOUNT = os.environ.get('CDK_DEFAULT_ACCOUNT', '123456789012')  # デフォルト値はダミー
+AWS_REGION = os.environ.get('CDK_DEFAULT_REGION', 'ap-northeast-1')  # デフォルト値は東京リージョン
+
 # メインスタックの作成
 DifyCdkStack(app, STACK_NAME,
     description="Dify アプリケーション用のインフラストラクチャ",
+    # 環境設定
+    env=cdk.Environment(
+        account=AWS_ACCOUNT,
+        region=AWS_REGION
+    ),
     # タグの設定
     tags={
         'Project': APP_NAME,

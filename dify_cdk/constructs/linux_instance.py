@@ -47,10 +47,15 @@ class LinuxInstanceConstruct(Construct):
         user_data = self._load_user_data()
         
         # Ubuntu AMIの検索
-        ubuntu_ami = ec2.MachineImage.lookup(
-            name=ami_name_pattern,
-            owners=["099720109477"]  # Canonical's AWS account ID
-        )
+        # 注: 実際のデプロイ時には、特定のAMI IDを指定することも可能
+        ubuntu_ami = ec2.MachineImage.generic_linux({
+            # デフォルトでは最新のUbuntu 22.04 AMIを使用
+            # 各リージョンで利用可能なAMI IDを指定
+            'ap-northeast-1': 'ami-0d52744d6551d851e',  # 東京リージョンのUbuntu 22.04
+            'us-east-1': 'ami-0c7217cdde317cfec',       # バージニアリージョンのUbuntu 22.04
+            'us-west-2': 'ami-0efcece6bed30fd98',       # オレゴンリージョンのUbuntu 22.04
+            # 必要に応じて他のリージョンを追加
+        })
         
         # インスタンスタイプの設定
         instance_type_obj = ec2.InstanceType(instance_type)
