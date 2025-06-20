@@ -1,5 +1,19 @@
 # Windows VM 初期化スクリプト
 
+# 日本語環境の設定
+# システムロケールを日本語に設定
+Set-WinSystemLocale ja-JP
+# UIの言語を日本語に設定
+Set-WinUILanguageOverride -Language ja-JP
+# ユーザー言語リストに日本語を追加して最優先に設定
+$LanguageList = New-WinUserLanguageList ja-JP
+$LanguageList.Add("en-US")
+Set-WinUserLanguageList $LanguageList -Force
+# 地域を日本に設定
+Set-WinHomeLocation -GeoId 0x7A # 日本の地域ID
+# タイムゾーンを東京に設定
+Set-TimeZone -Id "Tokyo Standard Time"
+
 # 実行ポリシーの設定
 Set-ExecutionPolicy Unrestricted -Force
 

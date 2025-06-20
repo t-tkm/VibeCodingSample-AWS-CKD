@@ -46,9 +46,9 @@ class WindowsInstanceConstruct(Construct):
         # ユーザーデータスクリプトの読み込み
         user_data = self._load_user_data()
         
-        # Windows AMIの検索
+        # Windows AMIの検索（日本語版）
         windows_ami = ec2.MachineImage.latest_windows(
-            version=ec2.WindowsVersion.WINDOWS_SERVER_2022_ENGLISH_FULL_BASE
+            version=ec2.WindowsVersion.WINDOWS_SERVER_2022_JAPANESE_FULL_BASE
         )
         
         # インスタンスタイプの設定
