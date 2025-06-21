@@ -26,6 +26,7 @@ class LinuxInstanceConstruct(Construct):
         instance_role: iam.Role,
         instance_type: str,
         ami_name_pattern: str,
+        config,
         **kwargs
     ):
         """
@@ -39,9 +40,12 @@ class LinuxInstanceConstruct(Construct):
             instance_role: IAMロール
             instance_type: インスタンスタイプ
             ami_name_pattern: AMI名のパターン
+            config: 設定オブジェクト
             **kwargs: その他の引数
         """
         super().__init__(scope, id)
+        
+        self.config = config
         
         # ユーザーデータスクリプトの読み込み
         user_data = self._load_user_data()
@@ -72,6 +76,7 @@ class LinuxInstanceConstruct(Construct):
             security_group=security_group,
             role=instance_role,
             user_data=user_data,
+            user_data_causes_replacement=False,
             block_devices=[
                 ec2.BlockDevice(
                     device_name="/dev/sda1",
@@ -88,7 +93,7 @@ class LinuxInstanceConstruct(Construct):
         user_password = ssm.StringParameter(
             self, "UserPassword",
             parameter_name=f"/dify/{id}/user-password",
-            string_value="P@ssw0rd123!",  # 初期パスワード（本番環境では自動生成すべき）
+            string_value=config.linux_admin_password,
             description="Linux VM user password",
             tier=ssm.ParameterTier.STANDARD,
             simple_name=False
@@ -124,8 +129,13 @@ class LinuxInstanceConstruct(Construct):
         
         # スクリプトファイルが存在する場合は読み込む
         if os.path.exists(script_path):
-            with open(script_path, "r") as f:
+            with open(script_path, "r", encoding='utf-8') as f:
                 script_content = f.read()
+            
+            user_data.add_commands(
+                f"export admin_username='{self.config.linux_admin_username}'",
+                f"export admin_password='{self.config.linux_admin_password}'"
+            )
             user_data.add_commands(script_content)
         else:
             # デフォルトのスクリプト
@@ -142,7 +152,7 @@ class LinuxInstanceConstruct(Construct):
                 
                 # ユーザーの作成
                 "useradd -m -s /bin/bash dify",
-                "echo 'dify:P@ssw0rd123!' | chpasswd",
+                f"echo 'dify:{self.config.linux_admin_password}' | chpasswd",
                 "usermod -aG sudo dify",
                 
                 # asdfのインストール

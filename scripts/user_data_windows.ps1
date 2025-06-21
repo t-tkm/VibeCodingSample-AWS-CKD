@@ -24,7 +24,9 @@ try {
     Write-Log "Administratorアカウント有効化: $result1"
     
     # パスワードを設定
-    $result2 = net user Administrator "Admin@2024#Secure"
+    $password = if ($env:WINDOWS_ADMIN_PASSWORD) { $env:WINDOWS_ADMIN_PASSWORD } else { "Admin@2024#Secure" }
+    $username = if ($env:WINDOWS_ADMIN_USERNAME) { $env:WINDOWS_ADMIN_USERNAME } else { "Administrator" }
+    $result2 = net user $username $password
     Write-Log "パスワード設定: $result2"
     
     # パスワード期限なしに設定
@@ -148,5 +150,6 @@ catch {
 Write-Log "Windows VM setup completed successfully!"
 Write-Host "Windows VM setup completed successfully!"
 Write-Host "ログファイルの場所: $LogFile"
-Write-Host "Administratorアカウント: Administrator"
-Write-Host "パスワード: Admin@2024#Secure"
+$displayUsername = if ($env:WINDOWS_ADMIN_USERNAME) { $env:WINDOWS_ADMIN_USERNAME } else { "Administrator" }
+Write-Host "管理者アカウント: $displayUsername"
+Write-Host "パスワードは設定済みです"

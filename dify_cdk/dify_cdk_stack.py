@@ -52,7 +52,8 @@ class DifyCdkStack(Stack):
             security_group=security.windows_sg,
             instance_role=security.instance_role,
             instance_type=config.windows_instance_type,
-            ami_name_pattern=config.windows_ami_name
+            ami_name_pattern=config.windows_ami_name,
+            config=config
         )
         
         # Linux VMの作成
@@ -62,5 +63,6 @@ class DifyCdkStack(Stack):
             security_group=security.linux_sg,
             instance_role=security.instance_role,
             instance_type=config.linux_instance_type,
-            ami_name_pattern=config.linux_ami_name
+            ami_name_pattern=config.linux_ami_name,
+            config=config
         )
