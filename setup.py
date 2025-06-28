@@ -1,9 +1,10 @@
-import setuptools
+# from setuptools import setup, find_packages
+# Import specific functions from setuptools for better performance and code clarity
 
 with open("README.md") as fp:
     long_description = fp.read()
 
-setuptools.setup(
+setup(
     name="dify_cdk",
     version="0.0.1",
     description="AWS CDK プロジェクト - Dify デプロイメント",
@@ -11,7 +12,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     author="CDK User",
     package_dir={"": "dify_cdk"},
-    packages=setuptools.find_packages(where="dify_cdk"),
+    packages=find_packages(where="dify_cdk"),
     install_requires=[
         "aws-cdk-lib>=2.0.0",
         "constructs>=10.0.0",

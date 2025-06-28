@@ -73,7 +73,7 @@ class LinuxInstanceConstruct(Construct):
             role=instance_role,
             user_data=user_data,
             require_imdsv2=True,  # セキュリティ強化
-            detailed_monitoring=False,  # コスト最適化
+            detailed_monitoring=True,  # コスト最適化よりも詳細なモニタリングを優先
             block_devices=[
                 ec2.BlockDevice(
                     device_name="/dev/sda1",

@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import os
-import aws_cdk as cdk
+# Import specific classes from aws_cdk instead of the entire module
+# This improves performance and code clarity
+from aws_cdk import App, Environment
 from dify_cdk.dify_cdk_stack import DifyCdkStack
 
 # スタック名とタグの設定
@@ -11,7 +13,7 @@ APP_NAME = os.environ.get('APP_NAME', 'dify')
 ENV_NAME = os.environ.get('ENV_NAME', 'dev')
 STACK_NAME = f"{APP_NAME}-{ENV_NAME}"
 
-app = cdk.App()
+app = App()
 
 # 環境設定（AWS アカウントとリージョン）
 # 実際のデプロイ時には、これらの値を適切に設定する必要があります
@@ -22,7 +24,7 @@ AWS_REGION = os.environ.get('CDK_DEFAULT_REGION', 'ap-northeast-1')  # デフォ
 DifyCdkStack(app, STACK_NAME,
     description="Dify アプリケーション用のインフラストラクチャ",
     # 環境設定
-    env=cdk.Environment(
+    env=Environment(
         account=AWS_ACCOUNT,
         region=AWS_REGION
     ),

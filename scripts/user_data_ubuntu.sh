@@ -135,11 +135,21 @@ systemctl start docker
 systemctl enable docker
 
 # ubuntuユーザーをdockerグループに追加
-usermod -aG docker ${admin_username}
+usermod -aG docker "${admin_username}"
 
 # Docker Compose のインストール（standalone版）
 log "Installing Docker Compose..."
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+# Dify用ディレクトリを作成
+log "Creating Dify installation directory..."
+mkdir -p /opt/dify
+cd /opt/dify
+
+# Difyリポジトリをクローン
+log "Cloning Dify repository..."
+git clone https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
 # Dify用ディレクトリを作成
@@ -211,7 +221,7 @@ volumes:
 EOF
 
 # 適切な権限を設定
-chown -R ${admin_username}:${admin_username} /opt/dify
+chown -R "${admin_username}:${admin_username}" /opt/dify
 
 # Dify用systemdサービスを作成
 log "Setting up auto-start service..."

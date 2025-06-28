@@ -77,7 +77,8 @@ class WindowsInstanceConstruct(Construct):
                         encrypted=True
                     )
                 )
-            ]
+            ],
+            disable_api_termination=True  # Termination Protection を有効化
         )
         
         # SSMパラメータストアに管理者パスワードを保存
@@ -135,9 +136,15 @@ class WindowsInstanceConstruct(Construct):
                 # ファイアウォールの設定
                 "New-NetFirewallRule -DisplayName 'Allow HTTP' -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow",
                 # SSMエージェントの更新
-                "Invoke-WebRequest https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe -OutFile $env:TEMP\\SSMAgent_latest.exe",
-                "Start-Process -FilePath $env:TEMP\\SSMAgent_latest.exe -ArgumentList '/S' -Wait",
-                "Restart-Service AmazonSSMAgent"
+                "$SSMAgentUrl = 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe'", # import urllib.parse
+                "$SSMAgentUri = [System.Uri]::new($SSMAgentUrl)",
+                "if ($SSMAgentUri.Host -eq 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') {",
+                "    Invoke-WebRequest $SSMAgentUrl -OutFile $env:TEMP\\SSMAgent_latest.exe",
+                "    Start-Process -FilePath $env:TEMP\\SSMAgent_latest.exe -ArgumentList '/S' -Wait",
+                "    Restart-Service AmazonSSMAgent",
+                "} else {",
+                "    Write-Error 'Invalid SSM Agent download URL'",
+                "}"
             )
         
         return user_data
