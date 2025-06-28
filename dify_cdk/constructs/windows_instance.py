@@ -82,8 +82,7 @@ class WindowsInstanceConstruct(Construct):
                         encrypted=True
                     )
                 )
-            ],
-            disable_api_termination=True  # Termination Protection を有効化
+            ]
         )
         
         # SSMパラメータストアに管理者パスワードを保存
