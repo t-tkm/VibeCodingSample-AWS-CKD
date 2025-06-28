@@ -26,6 +26,7 @@ class WindowsInstanceConstruct(Construct):
         instance_role: iam.Role,
         instance_type: str,
         ami_name_pattern: str,
+        config,
         **kwargs
     ):
         """
@@ -39,9 +40,12 @@ class WindowsInstanceConstruct(Construct):
             instance_role: IAMロール
             instance_type: インスタンスタイプ
             ami_name_pattern: AMI名のパターン
+            config: 設定オブジェクト
             **kwargs: その他の引数
         """
         super().__init__(scope, id)
+        
+        self.config = config
         
         # ユーザーデータスクリプトの読み込み
         user_data = self._load_user_data()
@@ -68,6 +72,7 @@ class WindowsInstanceConstruct(Construct):
             user_data=user_data,
             require_imdsv2=True,  # セキュリティ強化
             detailed_monitoring=False,  # コスト最適化
+            user_data_causes_replacement=False,
             block_devices=[
                 ec2.BlockDevice(
                     device_name="/dev/sda1",
@@ -85,7 +90,7 @@ class WindowsInstanceConstruct(Construct):
         admin_password = ssm.StringParameter(
             self, "AdminPassword",
             parameter_name=f"/dify/{id}/admin-password",
-            string_value="P@ssw0rd123!",  # 初期パスワード（本番環境では自動生成すべき）
+            string_value=config.windows_admin_password,
             description="Windows VM administrator password",
             tier=ssm.ParameterTier.STANDARD,
             simple_name=False
@@ -121,8 +126,13 @@ class WindowsInstanceConstruct(Construct):
         
         # スクリプトファイルが存在する場合は読み込む
         if os.path.exists(script_path):
-            with open(script_path, "r") as f:
+            with open(script_path, "r", encoding='utf-8') as f:
                 script_content = f.read()
+            
+            user_data.add_commands(
+                f"$env:WINDOWS_ADMIN_USERNAME = '{self.config.windows_admin_username}'",
+                f"$env:WINDOWS_ADMIN_PASSWORD = '{self.config.windows_admin_password}'"
+            )
             user_data.add_commands(script_content)
         else:
             # デフォルトのスクリプト
@@ -130,8 +140,8 @@ class WindowsInstanceConstruct(Construct):
                 "Set-ExecutionPolicy Unrestricted -Force",
                 "Install-WindowsFeature -Name Web-Server -IncludeManagementTools",
                 # 管理者パスワードの設定
-                "$Password = ConvertTo-SecureString 'P@ssw0rd123!' -AsPlainText -Force",
-                "$UserAccount = Get-LocalUser -Name 'Administrator'",
+                f"$Password = ConvertTo-SecureString '{self.config.windows_admin_password}' -AsPlainText -Force",
+                f"$UserAccount = Get-LocalUser -Name '{self.config.windows_admin_username}'",
                 "$UserAccount | Set-LocalUser -Password $Password",
                 # ファイアウォールの設定
                 "New-NetFirewallRule -DisplayName 'Allow HTTP' -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow",

@@ -60,7 +60,43 @@ source .venv/bin/activate  # Linuxの場合
 pip install -r requirements.txt
 ```
 
-3. （オプション）AWS認証情報を設定
+3. 認証情報の設定
+
+   VMのログイン認証情報を設定するため、`credentials.json`ファイルを作成してください：
+
+   ```bash
+   cp credentials.example.json credentials.json
+   ```
+
+   `credentials.json`ファイルを編集して、実際のユーザー名とパスワードを設定してください：
+
+   ```json
+   {
+     "windows": {
+       "admin_username": "Administrator",
+       "admin_password": "YOUR_SECURE_WINDOWS_PASSWORD"
+     },
+     "linux": {
+       "admin_username": "ubuntu",
+       "admin_password": "YOUR_SECURE_LINUX_PASSWORD"
+     }
+   }
+   ```
+
+   **注意**: `credentials.json`ファイルは機密情報を含むため、Gitリポジトリにコミットされません。
+
+   **環境変数による認証情報の上書き**
+
+   環境変数を使用して認証情報を上書きすることも可能です：
+
+   ```bash
+   export WINDOWS_ADMIN_USERNAME="Administrator"
+   export WINDOWS_ADMIN_PASSWORD="YourWindowsPassword"
+   export LINUX_ADMIN_USERNAME="ubuntu"
+   export LINUX_ADMIN_PASSWORD="YourLinuxPassword"
+   ```
+
+4. （オプション）AWS認証情報を設定
    通常はAWS CLIで認証情報が設定されていますが、一時的な認証情報や異なるプロファイルを使用する場合は、以下の環境変数を設定できます：
 
 ```bash
@@ -74,12 +110,12 @@ export AWS_SESSION_TOKEN="<セッショントークン>"
    - AWS STS (Security Token Service)
    - IAMユーザーのアクセスキー
 
-4. （オプション）AWS リージョンを設定
+5. （オプション）AWS リージョンを設定
 ```
 export AWS_DEFAULT_REGION=ap-northeast-1
 ```
 
-5. CDKをデプロイ
+6. CDKをデプロイ
 ```
 cdk deploy
 ```
@@ -94,9 +130,26 @@ cdk deploy
 
 ## VMパスワードの変更方法
 
-### Windows VMのパスワード変更
+### 設定ファイルでの変更（推奨）
 
-Windows VMのAdministratorパスワードを変更するには、以下の手順で`scripts/user_data_windows.ps1`ファイルを編集します：
+VMのパスワードを変更する最も簡単な方法は、`credentials.json`ファイルを更新することです：
+
+1. `credentials.json`ファイルを編集してパスワードを変更
+2. CDKスタックを再デプロイ：`cdk deploy`
+
+### 環境変数での変更
+
+デプロイ時に環境変数を使用してパスワードを上書きできます：
+
+```bash
+export WINDOWS_ADMIN_PASSWORD="新しいWindowsパスワード"
+export LINUX_ADMIN_PASSWORD="新しいLinuxパスワード"
+cdk deploy
+```
+
+### Windows VMでの直接変更
+
+Systems Manager Session Managerを使用してWindows VMに接続し、PowerShellで以下のコマンドを実行：
 
 ```powershell
 # 管理者パスワードの設定
@@ -105,25 +158,22 @@ $UserAccount = Get-LocalUser -Name 'Administrator'
 $UserAccount | Set-LocalUser -Password $Password
 ```
 
-`'新しいパスワード'`の部分を、希望するパスワードに変更してください。パスワードは複雑さの要件（大文字、小文字、数字、特殊文字を含む）を満たす必要があります。
+### Linux VMでの直接変更
 
-### Linux VMのパスワード変更
-
-Linux VMでは、初期設定で`ubuntu`ユーザーがデフォルトで使用されます。パスワードを設定するには、`scripts/user_data_ubuntu.sh`ファイルに以下の行を追加します：
+Systems Manager Session Managerを使用してLinux VMに接続し、以下のコマンドを実行：
 
 ```bash
 # ubuntuユーザーのパスワード設定
-echo 'ubuntu:新しいパスワード' | chpasswd
+sudo passwd ubuntu
 ```
-
-この行を`# ubuntuユーザーをdockerグループに追加`の行の後に追加することをお勧めします。
 
 ## 注意事項
 
 - このインフラストラクチャは、インターネットからの直接アクセスを許可していません
 - Difyへのアクセスは、VPC内のリソースからのみ可能です
 - 複数環境のデプロイには、`cdk.context.json`ファイルでスタック名やタグを変更してください
-- パスワードはソースコードに平文で保存されるため、本番環境では適切なシークレット管理を検討してください
+- パスワードは`credentials.json`ファイルに平文で保存されるため、本番環境では適切なシークレット管理（AWS Secrets Manager等）を検討してください
+- `credentials.json`ファイルは機密情報を含むため、適切なファイル権限を設定し、バージョン管理システムにコミットしないでください
 
 ## 付録
 

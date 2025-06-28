@@ -19,7 +19,10 @@ venv.bak/
 
 # CDK Context & Staging files
 .cdk.staging/
-cdk.out/
+cdk.out
+
+# Credentials file (contains sensitive information)
+credentials.json
 
 # Distribution / packaging
 .Python

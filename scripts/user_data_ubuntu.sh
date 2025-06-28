@@ -22,7 +22,7 @@ trap 'handle_error $LINENO' ERR
 # スクリプト開始
 log "Starting Dify installation script..."
 
-# デフォルト値の設定（CDKから変数として渡されることを想定）
+# デフォルト値の設定（CDKから環境変数として渡される）
 admin_username=${admin_username:-ubuntu}
 admin_password=${admin_password:-P@ssw0rd123!}
 enable_cloudwatch_agent=${enable_cloudwatch_agent:-false}
