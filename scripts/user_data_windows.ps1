@@ -11,6 +11,42 @@ function Write-Log {
 
 Write-Log "Windows VM 初期化開始"
 
+# IMDSv2対応のメタデータ取得ヘルパー関数
+function Get-InstanceMetadata {
+    param(
+        [string]$Path
+    )
+    
+    try {
+        # IMDSv2トークンの取得
+        $tokenUri = "http://169.254.169.254/latest/api/token"
+        $headers = @{
+            "X-aws-ec2-metadata-token-ttl-seconds" = "21600"
+        }
+        $token = Invoke-RestMethod -Uri $tokenUri -Method Put -Headers $headers -ErrorAction Stop
+        
+        if ($token) {
+            # メタデータの取得
+            $metadataUri = "http://169.254.169.254/latest/meta-data/$Path"
+            $metadataHeaders = @{
+                "X-aws-ec2-metadata-token" = $token
+            }
+            return Invoke-RestMethod -Uri $metadataUri -Headers $metadataHeaders -ErrorAction Stop
+        }
+    }
+    catch {
+        Write-Log "Failed to get metadata for path: $Path - $($_.Exception.Message)"
+        return $null
+    }
+}
+
+# インスタンス情報の取得（ログ用）
+Write-Log "Getting instance information..."
+$instanceId = Get-InstanceMetadata -Path "instance-id"
+$region = Get-InstanceMetadata -Path "placement/region"
+Write-Log "Instance ID: $instanceId"
+Write-Log "Region: $region"
+
 # 実行ポリシーの設定
 Set-ExecutionPolicy Unrestricted -Force
 Write-Log "実行ポリシー設定完了"
@@ -112,9 +148,17 @@ catch {
 
 # SSMエージェントの更新
 try {
+    # IMDSv2対応の環境変数を設定
+    [Environment]::SetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE", "IPv4", "Machine")
+    [Environment]::SetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS", "3", "Machine")
+    
+    # SSMエージェントのダウンロードと更新
     Invoke-WebRequest https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe -OutFile $env:TEMP\SSMAgent_latest.exe
     Start-Process -FilePath $env:TEMP\SSMAgent_latest.exe -ArgumentList '/S' -Wait
-    Restart-Service AmazonSSMAgent
+    
+    # SSMエージェントサービスの再起動
+    Start-Sleep -Seconds 10
+    Restart-Service AmazonSSMAgent -Force
     Write-Log "SSMエージェント更新完了"
 }
 catch {
@@ -141,6 +185,19 @@ try {
     # RDP設定の確認
     $rdpCheck = Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections"
     Write-Log "RDP設定確認: fDenyTSConnections = $($rdpCheck.fDenyTSConnections)"
+    
+    # IMDSv2環境変数の確認
+    $imdsMode = [Environment]::GetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE", "Machine")
+    $imdsAttempts = [Environment]::GetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS", "Machine")
+    Write-Log "IMDS設定確認: Mode = $imdsMode, Attempts = $imdsAttempts"
+    
+    # SSMエージェントサービスの状態確認
+    $ssmStatus = Get-Service AmazonSSMAgent -ErrorAction SilentlyContinue
+    if ($ssmStatus) {
+        Write-Log "SSMエージェント状態: $($ssmStatus.Status)"
+    } else {
+        Write-Log "SSMエージェントサービスが見つかりません"
+    }
 }
 catch {
     Write-Log "最終確認エラー: $($_.Exception.Message)"
@@ -153,3 +210,67 @@ Write-Host "ログファイルの場所: $LogFile"
 $displayUsername = if ($env:WINDOWS_ADMIN_USERNAME) { $env:WINDOWS_ADMIN_USERNAME } else { "Administrator" }
 Write-Host "管理者アカウント: $displayUsername"
 Write-Host "パスワードは設定済みです"
+
+# IMDSv2診断スクリプトの作成
+$DiagnosticScript = @"
+# IMDSv2診断スクリプト
+Write-Host "=== IMDSv2診断テスト ==="
+
+# 環境変数の確認
+Write-Host "環境変数:"
+Write-Host "  AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE: `$([Environment]::GetEnvironmentVariable('AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE', 'Machine'))"
+Write-Host "  AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS: `$([Environment]::GetEnvironmentVariable('AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS', 'Machine'))"
+
+# IMDSv1テスト（失敗するはず）
+Write-Host "`nIMDSv1テスト（失敗する予定）:"
+try {
+    `$imdsv1Result = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/instance-id" -TimeoutSec 5 -ErrorAction Stop
+    Write-Host "⚠️  IMDSv1が有効: `$imdsv1Result" -ForegroundColor Yellow
+} catch {
+    Write-Host "✓ IMDSv1が正しく無効化されています" -ForegroundColor Green
+}
+
+# IMDSv2テスト
+Write-Host "`nIMDSv2テスト:"
+try {
+    `$tokenUri = "http://169.254.169.254/latest/api/token"
+    `$headers = @{"X-aws-ec2-metadata-token-ttl-seconds" = "21600"}
+    `$token = Invoke-RestMethod -Uri `$tokenUri -Method Put -Headers `$headers -TimeoutSec 10 -ErrorAction Stop
+    
+    if (`$token) {
+        Write-Host "✓ IMDSv2トークン取得成功" -ForegroundColor Green
+        Write-Host "  トークン: `$(`$token.Substring(0, [Math]::Min(20, `$token.Length)))..."
+        
+        # 各種メタデータの取得テスト
+        `$metadataHeaders = @{"X-aws-ec2-metadata-token" = `$token}
+        `$instanceId = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/instance-id" -Headers `$metadataHeaders -TimeoutSec 10
+        `$region = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/placement/region" -Headers `$metadataHeaders -TimeoutSec 10
+        `$instanceType = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/instance-type" -Headers `$metadataHeaders -TimeoutSec 10
+        
+        Write-Host "  インスタンスID: `$instanceId"
+        Write-Host "  リージョン: `$region"
+        Write-Host "  インスタンスタイプ: `$instanceType"
+    }
+} catch {
+    Write-Host "✗ IMDSv2トークン取得失敗: `$(`$_.Exception.Message)" -ForegroundColor Red
+}
+
+# SSM Agentの状態確認  
+Write-Host "`nSSM Agent状態:"
+try {
+    `$ssmService = Get-Service AmazonSSMAgent -ErrorAction Stop
+    if (`$ssmService.Status -eq 'Running') {
+        Write-Host "✓ SSM Agent実行中" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  SSM Agent状態: `$(`$ssmService.Status)" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "✗ SSM Agentが見つかりません" -ForegroundColor Red
+}
+
+Write-Host "`n=== 診断完了 ==="
+"@
+
+$DiagnosticScript | Out-File -FilePath "C:\Windows\Temp\IMDSv2_Diagnostic.ps1" -Encoding UTF8
+Write-Log "IMDSv2診断スクリプトを作成しました: C:\Windows\Temp\IMDSv2_Diagnostic.ps1"
+Write-Host "IMDSv2診断を実行するには: PowerShell -ExecutionPolicy Bypass -File C:\Windows\Temp\IMDSv2_Diagnostic.ps1"

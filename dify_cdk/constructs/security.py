@@ -118,12 +118,63 @@ class SecurityConstruct(Construct):
         role = iam.Role(
             self, "EC2InstanceRole",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="Role for EC2 instances"
+            description="Role for EC2 instances with IMDSv2 support"
         )
         
         # Systems Manager管理ポリシーを追加（Fleet Manager接続用）
         role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
         )
+        
+        # CloudWatch Agent用のポリシーを追加
+        role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+        )
+        
+        # IMDSv2とSSMパラメータアクセス用のカスタムポリシー
+        custom_policy = iam.Policy(
+            self, "CustomInstancePolicy",
+            statements=[
+                # SSMパラメータの読み取り権限
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "ssm:GetParameter",
+                        "ssm:GetParameters",
+                        "ssm:GetParametersByPath"
+                    ],
+                    resources=[
+                        f"arn:aws:ssm:*:*:parameter/dify/*"
+                    ]
+                ),
+                # CloudWatch Logs用の権限
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogGroups",
+                        "logs:DescribeLogStreams"
+                    ],
+                    resources=[
+                        f"arn:aws:logs:*:*:log-group:/aws/ec2/dify-logs*"
+                    ]
+                ),
+                # EC2インスタンス情報の読み取り権限（IMDSv2用）
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "ec2:DescribeInstances",
+                        "ec2:DescribeInstanceAttribute",
+                        "ec2:DescribeInstanceStatus",
+                        "ec2:DescribeInstanceTypes"
+                    ],
+                    resources=["*"]
+                )
+            ]
+        )
+        
+        role.attach_inline_policy(custom_policy)
         
         return role
