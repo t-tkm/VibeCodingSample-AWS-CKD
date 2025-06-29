@@ -264,3 +264,68 @@ graph TD
     class Nginx proxy;
     class User user;
 ```
+
+### ローカルPCからのポートフォワード接続
+
+AWS Systems Manager Session Managerを使用して、ローカルPCからVMインスタンスへポートフォワード接続を行うことができます。
+
+#### 前提条件
+
+- AWS CLI v2がインストールされていること
+- Session Manager pluginがインストールされていること
+- 適切なAWS認証情報が設定されていること
+
+#### RDP接続（Windows VM）
+
+1. ポートフォワードセッションを開始：
+```bash
+aws ssm start-session --target <Windows-インスタンスID> --document-name AWS-StartPortForwardingSession --parameters "portNumber=3389,localPortNumber=13389"
+```
+
+2. 別のターミナルまたはコマンドプロンプトで、リモートデスクトップクライアントを使用して接続：
+```
+mstsc /v:localhost:13389
+```
+
+または、リモートデスクトップクライアントで `localhost:13389` に接続
+
+#### SSH接続（Linux VM）
+
+1. ポートフォワードセッションを開始：
+```bash
+aws ssm start-session --target <Linux-インスタンスID> --document-name AWS-StartPortForwardingSession --parameters "portNumber=22,localPortNumber=12222"
+```
+
+2. 別のターミナルでSSH接続：
+```bash
+ssh -p 12222 ubuntu@localhost
+```
+
+#### HTTPS接続（Dify Webインターフェース）
+
+Linux VMで実行中のDifyに直接アクセスする場合：
+
+1. ポートフォワードセッションを開始：
+```bash
+aws ssm start-session --target <Linux-インスタンスID> --document-name AWS-StartPortForwardingSession --parameters "portNumber=80,localPortNumber=18080"
+```
+
+2. ブラウザで以下のURLにアクセス：
+```
+http://localhost:18080
+```
+
+#### インスタンスIDの確認方法
+
+1. AWS Management Consoleにログイン
+2. EC2サービスを選択
+3. 「インスタンス」ページで、対象のWindows VMまたはLinux VMを確認
+4. インスタンスIDをコピー（例：`i-0123456789abcdef0`）
+
+#### 注意事項
+
+- `<Windows-インスタンスID>`、`<Linux-インスタンスID>` は実際のインスタンスIDに置き換えてください
+- ポートフォワードセッションは、コマンドを実行しているターミナルを開いている間のみ有効です
+- セッションを終了するには、`Ctrl+C` を押してください
+- ローカルポート番号は任意の使用可能なポート番号に変更できます
+- 複数のセッションを同時に実行する場合は、異なるローカルポート番号を使用してください
