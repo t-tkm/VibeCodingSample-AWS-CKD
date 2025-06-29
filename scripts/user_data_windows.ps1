@@ -146,23 +146,95 @@ catch {
     Write-Log "Chocolatey関連エラー: $($_.Exception.Message)"
 }
 
-# SSMエージェントの更新
+# SSMエージェントの設定と更新
 try {
+    Write-Log "SSMエージェントの設定開始"
+    
     # IMDSv2対応の環境変数を設定
     [Environment]::SetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE", "IPv4", "Machine")
     [Environment]::SetEnvironmentVariable("AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS", "3", "Machine")
+    Write-Log "IMDSv2環境変数設定完了"
     
-    # SSMエージェントのダウンロードと更新
-    Invoke-WebRequest https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe -OutFile $env:TEMP\SSMAgent_latest.exe
-    Start-Process -FilePath $env:TEMP\SSMAgent_latest.exe -ArgumentList '/S' -Wait
+    # 既存のSSMエージェントサービスの状態を確認
+    $ssmService = Get-Service -Name "AmazonSSMAgent" -ErrorAction SilentlyContinue
+    if ($ssmService) {
+        Write-Log "既存のSSMエージェントサービスが見つかりました: $($ssmService.Status)"
+        if ($ssmService.Status -eq "Running") {
+            Stop-Service AmazonSSMAgent -Force -ErrorAction SilentlyContinue
+            Write-Log "SSMエージェントサービスを停止しました"
+        }
+    } else {
+        Write-Log "SSMエージェントサービスが見つかりません。新規インストールを実行します"
+    }
     
-    # SSMエージェントサービスの再起動
-    Start-Sleep -Seconds 10
-    Restart-Service AmazonSSMAgent -Force
-    Write-Log "SSMエージェント更新完了"
+    # Windows Server 2019用のSSMエージェントをダウンロード
+    $ssmUrl = "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe"
+    $ssmInstaller = "$env:TEMP\AmazonSSMAgentSetup.exe"
+    
+    Write-Log "SSMエージェントをダウンロード中: $ssmUrl"
+    
+    # TLS設定とダウンロード
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $webClient = New-Object System.Net.WebClient
+    $webClient.DownloadFile($ssmUrl, $ssmInstaller)
+    Write-Log "SSMエージェントダウンロード完了"
+    
+    # インストーラーの実行
+    if (Test-Path $ssmInstaller) {
+        Write-Log "SSMエージェントインストール開始"
+        $installProcess = Start-Process -FilePath $ssmInstaller -ArgumentList '/S' -Wait -PassThru -ErrorAction SilentlyContinue
+        
+        if ($installProcess.ExitCode -eq 0) {
+            Write-Log "SSMエージェントインストール成功"
+        } else {
+            Write-Log "SSMエージェントインストール終了コード: $($installProcess.ExitCode)"
+        }
+        
+        # インストーラーファイルを削除
+        Remove-Item $ssmInstaller -Force -ErrorAction SilentlyContinue
+    }
+    
+    # サービスの開始を待機
+    Start-Sleep -Seconds 15
+    
+    # SSMエージェントサービスの開始
+    $maxRetries = 3
+    for ($i = 1; $i -le $maxRetries; $i++) {
+        try {
+            $ssmServiceCheck = Get-Service -Name "AmazonSSMAgent" -ErrorAction Stop
+            if ($ssmServiceCheck.Status -ne "Running") {
+                Start-Service AmazonSSMAgent -ErrorAction Stop
+                Write-Log "SSMエージェントサービスを開始しました (試行 $i)"
+                break
+            } else {
+                Write-Log "SSMエージェントサービスは既に実行中です"
+                break
+            }
+        }
+        catch {
+            Write-Log "SSMエージェントサービス開始エラー (試行 $i): $($_.Exception.Message)"
+            if ($i -lt $maxRetries) {
+                Start-Sleep -Seconds 10
+            }
+        }
+    }
+    
+    # 最終的なサービス状態の確認
+    $finalStatus = Get-Service -Name "AmazonSSMAgent" -ErrorAction SilentlyContinue
+    if ($finalStatus) {
+        Write-Log "SSMエージェント最終状態: $($finalStatus.Status)"
+        if ($finalStatus.Status -eq "Running") {
+            Write-Log "✓ SSMエージェント設定・更新完了"
+        } else {
+            Write-Log "⚠️ SSMエージェントは正常に動作していない可能性があります"
+        }
+    } else {
+        Write-Log "✗ SSMエージェントサービスが見つかりません"
+    }
 }
 catch {
-    Write-Log "SSMエージェント更新エラー: $($_.Exception.Message)"
+    Write-Log "SSMエージェント設定エラー: $($_.Exception.Message)"
+    Write-Log "エラー詳細: $($_.Exception.StackTrace)"
 }
 
 # ホストファイルの設定（Linux VMへの接続用）

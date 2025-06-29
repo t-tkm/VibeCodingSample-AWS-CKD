@@ -52,7 +52,7 @@ class WindowsInstanceConstruct(Construct):
         
         # Windows AMIの検索（日本語版）
         windows_ami = ec2.MachineImage.latest_windows(
-            version=ec2.WindowsVersion.WINDOWS_SERVER_2022_JAPANESE_FULL_BASE
+            version=ec2.WindowsVersion.WINDOWS_SERVER_2019_JAPANESE_FULL_BASE
         )
         
         # インスタンスタイプの設定
@@ -144,15 +144,23 @@ class WindowsInstanceConstruct(Construct):
                 "$UserAccount | Set-LocalUser -Password $Password",
                 # ファイアウォールの設定
                 "New-NetFirewallRule -DisplayName 'Allow HTTP' -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow",
-                # SSMエージェントの更新
-                "$SSMAgentUrl = 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe'", # import urllib.parse
-                "$SSMAgentUri = [System.Uri]::new($SSMAgentUrl)",
-                "if ($SSMAgentUri.Host -eq 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX') {",
-                "    Invoke-WebRequest $SSMAgentUrl -OutFile $env:TEMP\\SSMAgent_latest.exe",
-                "    Start-Process -FilePath $env:TEMP\\SSMAgent_latest.exe -ArgumentList '/S' -Wait",
-                "    Restart-Service AmazonSSMAgent",
-                "} else {",
-                "    Write-Error 'Invalid SSM Agent download URL'",
+                # SSMエージェントの設定と更新（Windows Server 2019対応）
+                "[Environment]::SetEnvironmentVariable('AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE', 'IPv4', 'Machine')",
+                "[Environment]::SetEnvironmentVariable('AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS', '3', 'Machine')",
+                "$SSMAgentUrl = 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgentSetup.exe'",
+                "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12",
+                "$ssmInstaller = '$env:TEMP\\AmazonSSMAgentSetup.exe'",
+                "try {",
+                "    $webClient = New-Object System.Net.WebClient",
+                "    $webClient.DownloadFile($SSMAgentUrl, $ssmInstaller)",
+                "    if (Test-Path $ssmInstaller) {",
+                "        Start-Process -FilePath $ssmInstaller -ArgumentList '/S' -Wait",
+                "        Start-Sleep -Seconds 10",
+                "        Start-Service AmazonSSMAgent -ErrorAction SilentlyContinue",
+                "        Remove-Item $ssmInstaller -Force -ErrorAction SilentlyContinue",
+                "    }",
+                "} catch {",
+                "    Write-Error 'SSM Agent setup failed: ' + $_.Exception.Message",
                 "}"
             )
         

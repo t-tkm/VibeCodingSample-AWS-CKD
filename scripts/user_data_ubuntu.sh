@@ -22,25 +22,6 @@ trap 'handle_error $LINENO' ERR
 # スクリプト開始
 log "Starting Dify installation script..."
 
-# IMDSv2対応のメタデータ取得ヘルパー関数
-get_metadata() {
-    local path="$1"
-    local token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -s)
-    if [ -n "$token" ]; then
-        curl -H "X-aws-ec2-metadata-token: $token" -s "http://169.254.169.254/latest/meta-data/${path}"
-    else
-        log "ERROR: Failed to get IMDS token"
-        return 1
-    fi
-}
-
-# インスタンス情報の取得（ログ用）
-log "Getting instance information..."
-INSTANCE_ID=$(get_metadata "instance-id" || echo "unknown")
-REGION=$(get_metadata "placement/region" || echo "unknown")
-log "Instance ID: $INSTANCE_ID"
-log "Region: $REGION"
-
 # デフォルト値の設定（CDKから環境変数として渡される）
 admin_username=${admin_username:-ubuntu}
 admin_password=${admin_password:-P@ssw0rd123!}
@@ -87,12 +68,9 @@ if [ "${enable_cloudwatch_agent}" = "true" ]; then
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
     dpkg -i -E ./amazon-cloudwatch-agent.deb
     
-    # IMDSv2対応のCloudWatch設定
+    # 基本的なCloudWatch設定
     cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWEOF'
 {
-    "agent": {
-        "region": "auto"
-    },
     "logs": {
         "logs_collected": {
             "files": {
@@ -100,14 +78,12 @@ if [ "${enable_cloudwatch_agent}" = "true" ]; then
                     {
                         "file_path": "/var/log/user-data.log",
                         "log_group_name": "/aws/ec2/dify-logs",
-                        "log_stream_name": "{instance_id}/dify-setup",
-                        "timezone": "UTC"
+                        "log_stream_name": "{instance_id}/dify-setup"
                     },
                     {
                         "file_path": "/var/log/syslog",
                         "log_group_name": "/aws/ec2/dify-logs",
-                        "log_stream_name": "{instance_id}/syslog",
-                        "timezone": "UTC"
+                        "log_stream_name": "{instance_id}/syslog"
                     }
                 ]
             }
@@ -142,9 +118,7 @@ if [ "${enable_cloudwatch_agent}" = "true" ]; then
 }
 CWEOF
     
-    # CloudWatch agentの開始（IMDSv2対応）
-    export AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4
-    export AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS=3
+    # CloudWatch agentの開始
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
     log "CloudWatch Agent installed and started"
 fi
@@ -196,9 +170,6 @@ services:
       - FILES_URL=http://localhost
       - STORAGE_TYPE=local
       - STORAGE_LOCAL_PATH=/app/api/storage
-      # IMDSv2对応
-      - AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4
-      - AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS=3
     restart: unless-stopped
 
   # ワーカーサービス
@@ -206,9 +177,6 @@ services:
     environment:
       - STORAGE_TYPE=local
       - STORAGE_LOCAL_PATH=/app/api/storage
-      # IMDSv2対応
-      - AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv4
-      - AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS=3
     restart: unless-stopped
 
   # Webサービス
@@ -302,81 +270,9 @@ echo "http://$(hostname -I | awk '{print $1}')"
 echo -e "\nシステム情報:"
 echo "Docker: $(docker --version)"
 echo "Docker Compose: $(docker compose version)"
-
-echo -e "\nIMDSv2対応状況:"
-echo "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE: $AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE"
-echo "AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS: $AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS"
-
-# IMDSv2テスト
-echo -e "\nIMDSv2テスト:"
-TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -s --max-time 10)
-if [ -n "$TOKEN" ]; then
-    echo "✓ IMDSv2トークン取得成功"
-    INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s --max-time 10 "http://169.254.169.254/latest/meta-data/instance-id")
-    echo "✓ インスタンスID: $INSTANCE_ID"
-else
-    echo "✗ IMDSv2トークン取得失敗"
-fi
 EOF
 
 chmod +x /opt/dify/check_status.sh
-
-# IMDSv2診断用の個別スクリプトも作成
-cat > /opt/dify/imds_test.sh << 'EOF'
-#!/bin/bash
-echo "=== IMDSv2診断テスト ==="
-
-# 環境変数の確認
-echo "環境変数:"
-echo "  AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE: $AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE"
-echo "  AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS: $AWS_EC2_METADATA_SERVICE_NUM_ATTEMPTS"
-
-# IMDSv1テスト（失敗するはず）
-echo -e "\nIMDSv1テスト（失敗する予定）:"
-IMDSv1_RESULT=$(curl -s --max-time 5 "http://169.254.169.254/latest/meta-data/instance-id" 2>&1)
-if [ $? -eq 0 ] && [ -n "$IMDSv1_RESULT" ]; then
-    echo "⚠️  IMDSv1が有効: $IMDSv1_RESULT"
-else
-    echo "✓ IMDSv1が正しく無効化されています"
-fi
-
-# IMDSv2テスト
-echo -e "\nIMDSv2テスト:"
-TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -s --max-time 10)
-if [ -n "$TOKEN" ]; then
-    echo "✓ IMDSv2トークン取得成功"
-    echo "  トークン: ${TOKEN:0:20}..."
-    
-    # 各種メタデータの取得テスト
-    echo "  インスタンスID: $(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s --max-time 10 "http://169.254.169.254/latest/meta-data/instance-id")"
-    echo "  リージョン: $(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s --max-time 10 "http://169.254.169.254/latest/meta-data/placement/region")"
-    echo "  インスタンスタイプ: $(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s --max-time 10 "http://169.254.169.254/latest/meta-data/instance-type")"
-else
-    echo "✗ IMDSv2トークン取得失敗"
-fi
-
-# SSM Agentの状態確認
-echo -e "\nSSM Agent状態:"
-if systemctl is-active --quiet amazon-ssm-agent; then
-    echo "✓ SSM Agent実行中"
-else
-    echo "✗ SSM Agent停止中"
-fi
-
-# CloudWatch Agentの状態確認（インストールされている場合）
-echo -e "\nCloudWatch Agent状態:"
-if systemctl is-active --quiet amazon-cloudwatch-agent >/dev/null 2>&1; then
-    echo "✓ CloudWatch Agent実行中"
-elif systemctl list-unit-files | grep -q amazon-cloudwatch-agent; then
-    echo "⚠️  CloudWatch Agentがインストールされているが停止中"
-else
-    echo "- CloudWatch Agentはインストールされていません"
-fi
-
-echo -e "\n=== 診断完了 ==="
-EOF
-
-chmod +x /opt/dify/imds_test.sh
 
 # セットアップ完了
 log "Dify installation completed successfully!"
