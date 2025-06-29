@@ -161,41 +161,69 @@ sudo passwd ubuntu
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
 graph LR
+    subgraph LocalPC["ローカルPC"]
+        subgraph ClientApps["クライアントアプリケーション"]
+            RDPClient["RDPクライアント<br/>localhost:13389"]
+            SSHClient["SSHクライアント<br/>localhost:12222"]
+            Browser["Webブラウザ<br/>localhost:18080"]
+        end
+        AWSCli["AWS CLI<br/>Session Manager"]
+        WebConsole["AWS Management<br/>Console"]
+    end
+    
     subgraph AWS["AWS Cloud"]
         subgraph VPC["VPC"]
+            IGW["インターネット<br/>ゲートウェイ"]
+            
             subgraph PrivateSubnet["プライベートサブネット"]
-                WinVM["Windows VM\n管理用サーバー"]
-                LinuxVM["Linux VM\nUbuntu 22.04\nDify実行環境"]
+                WinVM["Windows VM<br/>管理用サーバー<br/>RDP:3389"]
+                LinuxVM["Linux VM<br/>Ubuntu 22.04<br/>Dify実行環境<br/>SSH:22, HTTP:80"]
+                SSMEndpoint["SSM VPC<br/>エンドポイント"]
             end
             
             subgraph PublicSubnet["パブリックサブネット"]
-                SSMEndpoint["SSM\nエンドポイント"]
+                NAT["NAT<br/>ゲートウェイ"]
             end
         end
         
-        SSM["AWS Systems Manager\n(Fleet Manager)"]
+        SSM["AWS Systems Manager<br/>(Fleet Manager)"]
+        Internet["インターネット"]
     end
     
-    User["ユーザー"]
+    %% Management Console接続
+    WebConsole -->|"AWS Management<br/>Console"| SSM
+    SSM -->|"API接続"| SSMEndpoint
+    SSMEndpoint -->|"Fleet Manager<br/>セッション"| WinVM
+    SSMEndpoint -->|"Fleet Manager<br/>セッション"| LinuxVM
     
-    User -->|"AWS Management\nConsole"| SSM
-    SSM -->|"セキュアな接続"| SSMEndpoint
-    SSMEndpoint -->|"RDP/SSH"| WinVM
-    SSMEndpoint -->|"RDP/SSH"| LinuxVM
+    %% ポートフォワード接続
+    RDPClient -.->|"localhost接続"| AWSCli
+    SSHClient -.->|"localhost接続"| AWSCli
+    Browser -.->|"localhost接続"| AWSCli
+    
+    AWSCli -->|"RDPトンネル<br/>13389→3389"| SSM
+    AWSCli -->|"SSHトンネル<br/>12222→22"| SSM
+    AWSCli -->|"HTTPトンネル<br/>18080→80"| SSM
+    
+    SSM -->|"セキュア<br/>トンネル"| SSMEndpoint
+    
+    %% 内部通信とアウトバウンド
     WinVM -->|"HTTP (80)"| LinuxVM
+    NAT -->|"アウトバウンド"| IGW
+    IGW -->|"インターネット接続"| Internet
     
     classDef default fill:#e0e0e0,stroke:#666,color:#333
     classDef aws fill:#d0d0d0,stroke:#666,color:#333
     classDef vpc fill:#c0c0c0,stroke:#666,color:#333
     classDef subnet fill:#b0b0b0,stroke:#666,color:#333
     classDef vm fill:#a0a0a0,stroke:#666,color:#333
-    classDef user fill:#909090,stroke:#666,color:#333
+    classDef client fill:#909090,stroke:#666,color:#333
     
-    class AWS,SSM aws;
+    class AWS,SSM,Internet aws;
     class VPC vpc;
     class PrivateSubnet,PublicSubnet subnet;
-    class WinVM,LinuxVM,SSMEndpoint vm;
-    class User user;
+    class WinVM,LinuxVM,SSMEndpoint,NAT,IGW vm;
+    class LocalPC,AWSCli,RDPClient,SSHClient,Browser,ClientApps,WebConsole client;
 ```
 
 ### Difyコンテナ構成図
@@ -204,16 +232,16 @@ graph LR
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#666', 'primaryTextColor': '#333', 'background': '#e0e0e0' }}}%%
 graph TD
     subgraph DockerCompose["Docker Compose環境"]
-        Nginx["Nginx\nリバースプロキシ\nポート: 80"]
-        API["API\nDify APIサーバー"]
-        Worker["Worker\nCeleryワーカー"]
-        Web["Web\nDifyフロントエンド"]
-        DB["PostgreSQL\nデータベース"]
-        Redis["Redis\nキャッシュ"]
-        Weaviate["Weaviate\nベクトルデータベース"]
+        Nginx["Nginx<br/>リバースプロキシ<br/>ポート: 80"]
+        API["API<br/>Dify APIサーバー"]
+        Worker["Worker<br/>Celeryワーカー"]
+        Web["Web<br/>Difyフロントエンド"]
+        DB["PostgreSQL<br/>データベース"]
+        Redis["Redis<br/>キャッシュ"]
+        Weaviate["Weaviate<br/>ベクトルデータベース"]
     end
     
-    User["Windows VM\nブラウザ"]
+    User["Windows VM<br/>ブラウザ"]
     
     User -->|"HTTP (80)"| Nginx
     Nginx -->|"/"| Web
@@ -239,6 +267,7 @@ graph TD
     class Nginx proxy;
     class User user;
 ```
+
 
 ### ローカルPCからのポートフォワード接続
 
