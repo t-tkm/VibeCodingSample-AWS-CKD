@@ -35,22 +35,23 @@ source .venv/bin/activate  # Linuxの場合
 pip install -r requirements.txt
 ```
 
-3. 環境変数の設定
+3. 環境変数の設定（**必須**）
 
-   VMのログイン認証情報とその他の設定を`.env`ファイルで管理します：
+   セキュリティのため、VMのログイン認証情報は環境変数で設定する必要があります：
 
    ```bash
+   # テンプレートファイルをコピー
    cp .env.example .env
    ```
 
-   `.env`ファイルを編集して、実際の値を設定してください：
+   `.env`ファイルを編集して、**必ず実際の値を設定してください**：
 
    ```bash
-   # VM認証情報
+   # VM認証情報（必須）
    WINDOWS_ADMIN_USERNAME=Administrator
-   WINDOWS_ADMIN_PASSWORD=YOUR_SECURE_WINDOWS_PASSWORD
+   WINDOWS_ADMIN_PASSWORD=YOUR_SECURE_WINDOWS_PASSWORD  # 必ず変更してください
    LINUX_ADMIN_USERNAME=ubuntu
-   LINUX_ADMIN_PASSWORD=YOUR_SECURE_LINUX_PASSWORD
+   LINUX_ADMIN_PASSWORD=YOUR_SECURE_LINUX_PASSWORD     # 必ず変更してください
 
    # プロジェクト設定
    APP_NAME=dify
@@ -62,7 +63,10 @@ pip install -r requirements.txt
    LINUX_INSTANCE_TYPE=t3.large
    ```
 
-   **注意**: `.env`ファイルは機密情報を含むため、Gitリポジトリにコミットされません。
+   **⚠️ セキュリティ注意事項**:
+   - パスワードは必ず強固なものに変更してください
+   - `.env`ファイルは機密情報を含むため、Gitリポジトリにコミットされません
+   - `.env`ファイルのファイル権限を適切に設定してください（`chmod 600 .env`）
 
    **システム環境変数の使用**
 

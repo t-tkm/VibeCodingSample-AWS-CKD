@@ -100,7 +100,10 @@ class Config:
     @property
     def windows_admin_password(self) -> str:
         """Windows VMの管理者パスワード"""
-        return os.environ.get('WINDOWS_ADMIN_PASSWORD', 'P@ssw0rd123!')
+        password = os.environ.get('WINDOWS_ADMIN_PASSWORD')
+        if not password:
+            raise ValueError("WINDOWS_ADMIN_PASSWORD環境変数が設定されていません。セキュリティのため、パスワードは環境変数で設定してください。")
+        return password
     
     @property
     def linux_admin_username(self) -> str:
@@ -110,7 +113,10 @@ class Config:
     @property
     def linux_admin_password(self) -> str:
         """Linux VMの管理者パスワード"""
-        return os.environ.get('LINUX_ADMIN_PASSWORD', 'P@ssw0rd123!')
+        password = os.environ.get('LINUX_ADMIN_PASSWORD')
+        if not password:
+            raise ValueError("LINUX_ADMIN_PASSWORD環境変数が設定されていません。セキュリティのため、パスワードは環境変数で設定してください。")
+        return password
     
     @property
     def tags(self) -> Dict[str, str]:
