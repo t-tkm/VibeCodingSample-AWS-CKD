@@ -263,10 +263,10 @@ SECRET_KEY_VALUE="dify_secret_key_$(openssl rand -hex 32)"
 cat >> .env << EOF
 # 基本設定
 EDITION=SELF_HOSTED
-CONSOLE_URL=http://${PRIVATE_IP}:3000
-API_URL=http://${PRIVATE_IP}:5001
-SERVICE_API_URL=http://${PRIVATE_IP}:5001
-APP_URL=http://${PRIVATE_IP}:3000
+CONSOLE_URL=http://${PRIVATE_IP}
+API_URL=http://${PRIVATE_IP}/api
+SERVICE_API_URL=http://${PRIVATE_IP}/api
+APP_URL=http://${PRIVATE_IP}
 
 # データベース設定
 DB_HOST=db
@@ -331,7 +331,8 @@ echo "Difyコンテナステータス:"
 cd /opt/dify/docker && docker compose ps
 
 echo -e "\\nDifyアプリケーションURL:"
-echo "http://$(hostname -I | awk '{print $1}'):3000"
+echo "http://$(hostname -I | awk '{print $1}')"
+echo "初期設定: http://$(hostname -I | awk '{print $1}')/install"
 
 echo -e "\\nシステム情報:"
 echo "Docker: $(docker --version)"
@@ -352,7 +353,8 @@ log "Docker Compose: $(docker compose version)"
 # 完了をログに記録
 echo "Difyのインストールが正常に完了しました！" > /var/log/dify-setup.log
 echo "インストール完了時刻: $(date)" >> /var/log/dify-setup.log
-echo "Difyアクセス先: http://$(hostname -I | awk '{print $1}'):3000" >> /var/log/dify-setup.log
+echo "Difyアクセス先: http://$(hostname -I | awk '{print $1}')" >> /var/log/dify-setup.log
+echo "管理画面初期設定: http://$(hostname -I | awk '{print $1}')/install" >> /var/log/dify-setup.log
 
 # 最終状態確認
 log "Final status check:"
