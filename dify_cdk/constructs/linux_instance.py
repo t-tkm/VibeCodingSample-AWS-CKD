@@ -18,9 +18,9 @@ class LinuxInstanceConstruct(Construct):
     """Linux VMインスタンスを作成するコンストラクト"""
 
     def __init__(
-        self, 
-        scope: Construct, 
-        id: str, 
+        self,
+        scope: Construct,
+        id: str,
         vpc: ec2.Vpc,
         security_group: ec2.SecurityGroup,
         instance_role: iam.Role,
@@ -31,7 +31,7 @@ class LinuxInstanceConstruct(Construct):
     ):
         """
         コンストラクタ
-        
+
         Args:
             scope: 親スコープ
             id: コンストラクトID
@@ -44,29 +44,26 @@ class LinuxInstanceConstruct(Construct):
             **kwargs: その他の引数
         """
         super().__init__(scope, id)
-        
+
         self.config = config
-        
+
         # ユーザーデータスクリプトの読み込み
         user_data = self._load_user_data()
-        
-        # Ubuntu AMIの検索
-        # 注: 実際のデプロイ時には、特定のAMI IDを指定することも可能
+
+        # Ubuntu AMIの設定
         ubuntu_ami = ec2.MachineImage.generic_linux({
-            # デフォルトでは最新のUbuntu 22.04 AMIを使用
-            # 各リージョンで利用可能なAMI IDを指定
             'ap-northeast-1': 'ami-0d52744d6551d851e',  # 東京リージョンのUbuntu 22.04
             'us-east-1': 'ami-0c7217cdde317cfec',       # バージニアリージョンのUbuntu 22.04
             'us-west-2': 'ami-0efcece6bed30fd98',       # オレゴンリージョンのUbuntu 22.04
-            # 必要に応じて他のリージョンを追加
         })
-        
+
         # インスタンスタイプの設定
         instance_type_obj = ec2.InstanceType(instance_type)
-        
+
         # Linux VMの作成
         self.instance = ec2.Instance(
-            self, "Instance",
+            self,
+            "Instance",
             vpc=vpc,
             instance_type=instance_type_obj,
             machine_image=ubuntu_ami,
@@ -77,8 +74,8 @@ class LinuxInstanceConstruct(Construct):
             role=instance_role,
             user_data=user_data,
             require_imdsv2=True,  # セキュリティ強化
-            detailed_monitoring=True,  # コスト最適化よりも詳細なモニタリングを優先
-            user_data_causes_replacement=False,
+            detailed_monitoring=True,  # 詳細なモニタリングを優先
+            user_data_causes_replacement=True,
             block_devices=[
                 ec2.BlockDevice(
                     device_name="/dev/sda1",
@@ -90,236 +87,277 @@ class LinuxInstanceConstruct(Construct):
                 )
             ]
         )
-        
+
         # SSMパラメータストアにユーザーパスワードを保存
         user_password = ssm.StringParameter(
-            self, "UserPassword",
+            self,
+            "UserPassword",
             parameter_name=f"/dify/{id}/user-password",
             string_value=config.linux_admin_password,
             description="Linux VM user password",
             tier=ssm.ParameterTier.STANDARD,
             simple_name=False
         )
-        
+
         # タグの追加
         Tags.of(self.instance).add("Name", f"{id}-instance")
-        
+
         # 出力の設定
         CfnOutput(
-            self, "InstanceId",
+            self,
+            "InstanceId",
             value=self.instance.instance_id,
             description="Linux VM Instance ID"
         )
-        
+
         CfnOutput(
-            self, "PrivateIP",
+            self,
+            "PrivateIP",
             value=self.instance.instance_private_ip,
             description="Linux VM Private IP Address"
         )
-    
+
     def _load_user_data(self) -> ec2.UserData:
         """
         ユーザーデータスクリプトを読み込む
-        
+
         Returns:
             UserDataインスタンス
         """
         user_data = ec2.UserData.for_linux()
-        
-        # スクリプトファイルのパス
-        script_path = os.path.join("scripts", "user_data_ubuntu.sh")
-        
-        # スクリプトファイルが存在する場合は読み込む
-        if os.path.exists(script_path):
-            with open(script_path, "r", encoding='utf-8') as f:
-                script_content = f.read()
-            
-            user_data.add_commands(
-                f"export admin_username='{self.config.linux_admin_username}'",
-                f"export admin_password='{self.config.linux_admin_password}'"
-            )
-            user_data.add_commands(script_content)
-        else:
-            # デフォルトのスクリプト
-            user_data.add_commands(
-                "#!/bin/bash",
-                "set -e",
-                
-                # システムの更新
-                "apt-get update",
-                "apt-get upgrade -y",
-                
-                # 必要なパッケージのインストール
-                "apt-get install -y apt-transport-https ca-certificates curl software-properties-common git",
-                
-                # ユーザーの作成
-                "useradd -m -s /bin/bash dify",
-                f"echo 'dify:{self.config.linux_admin_password}' | chpasswd",
-                "usermod -aG sudo dify",
-                
-                # asdfのインストール
-                "sudo -u dify bash -c 'git clone https://github.com/asdf-vm/asdf.git /home/dify/.asdf --branch v0.13.1'",
-                "sudo -u dify bash -c 'echo \". /home/dify/.asdf/asdf.sh\" >> /home/dify/.bashrc'",
-                "sudo -u dify bash -c 'echo \". /home/dify/.asdf/completions/asdf.bash\" >> /home/dify/.bashrc'",
-                
-                # Node.js 22のインストールに必要な依存関係をインストール
-                "apt-get install -y dirmngr gpg curl gawk",
-                
-                # asdfプラグインの追加とNode.js 22のインストール
-                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf plugin add nodejs https://github.com/asdf-vm/asdf-nodejs.git'",
-                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf install nodejs 22.1.0'",
-                "sudo -u dify bash -c 'source /home/dify/.asdf/asdf.sh && asdf global nodejs 22.1.0'",
-                
-                # Dockerのインストール
-                "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -",
-                "add-apt-repository \"deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"",
-                "apt-get update",
-                "apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin",
-                "usermod -aG docker dify",
-                
-                # Difyのインストールディレクトリの作成
-                "mkdir -p /opt/dify/docker",
-                "chown -R dify:dify /opt/dify",
-                
-                # Docker Composeファイルの作成
-                "cat > /opt/dify/docker/docker-compose.yml << 'EOL'",
-                "version: '3'",
-                "services:",
-                "  api:",
-                "    image: langgenius/dify-api:latest",
-                "    restart: always",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost:5001",
-                "      - CONSOLE_WEB_URL=http://localhost:3000",
-                "    volumes:",
-                "      - ./data:/app/api/storage",
-                "    depends_on:",
-                "      - db",
-                "      - redis",
-                "  worker:",
-                "    image: langgenius/dify-api:latest",
-                "    restart: always",
-                "    command: celery -A app.celery worker -l info",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost:5001",
-                "      - CONSOLE_WEB_URL=http://localhost:3000",
-                "    volumes:",
-                "      - ./data:/app/api/storage",
-                "    depends_on:",
-                "      - db",
-                "      - redis",
-                "  web:",
-                "    image: langgenius/dify-web:latest",
-                "    restart: always",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost:5001",
-                "    depends_on:",
-                "      - api",
-                "  db:",
-                "    image: postgres:15",
-                "    restart: always",
-                "    environment:",
-                "      - POSTGRES_USER=postgres",
-                "      - POSTGRES_PASSWORD=postgres",
-                "      - POSTGRES_DB=dify",
-                "    volumes:",
-                "      - ./data/postgres:/var/lib/postgresql/data",
-                "  redis:",
-                "    image: redis:6",
-                "    restart: always",
-                "    volumes:",
-                "      - ./data/redis:/data",
-                "  weaviate:",
-                "    image: semitechnologies/weaviate:1.19.6",
-                "    restart: always",
-                "    volumes:",
-                "      - ./data/weaviate:/var/lib/weaviate",
-                "    environment:",
-                "      - QUERY_DEFAULTS_LIMIT=20",
-                "      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true",
-                "      - PERSISTENCE_DATA_PATH=/var/lib/weaviate",
-                "      - DEFAULT_VECTORIZER_MODULE=none",
-                "      - ENABLE_MODULES=text2vec-openai",
-                "      - CLUSTER_HOSTNAME=node1",
-                "  nginx:",
-                "    image: nginx:latest",
-                "    restart: always",
-                "    ports:",
-                "      - \"80:80\"",
-                "    volumes:",
-                "      - ./nginx.conf:/etc/nginx/conf.d/default.conf",
-                "    depends_on:",
-                "      - api",
-                "      - web",
-                "EOL",
-                
-                # Nginxの設定ファイルの作成
-                "cat > /opt/dify/docker/nginx.conf << 'EOL'",
-                "server {",
-                "    listen 80;",
-                "    server_name localhost;",
-                "",
-                "    location / {",
-                "        proxy_pass http://web:3000;",
-                "        proxy_set_header Host $host;",
-                "        proxy_set_header X-Real-IP $remote_addr;",
-                "    }",
-                "",
-                "    location /api/ {",
-                "        proxy_pass http://api:5001/;",
-                "        proxy_set_header Host $host;",
-                "        proxy_set_header X-Real-IP $remote_addr;",
-                "    }",
-                "}",
-                "EOL",
-                
-                # Docker Compose Override ファイルの作成
-                "cat > /opt/dify/docker/docker-compose.override.yml << 'EOL'",
-                "version: '3'",
-                "services:",
-                "  api:",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost/api",
-                "      - CONSOLE_WEB_URL=http://localhost",
-                "  worker:",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost/api",
-                "      - CONSOLE_WEB_URL=http://localhost",
-                "  web:",
-                "    environment:",
-                "      - CONSOLE_API_URL=http://localhost/api",
-                "EOL",
-                
-                # 起動スクリプトの作成
-                "cat > /opt/dify/start.sh << 'EOL'",
-                "#!/bin/bash",
-                "cd /opt/dify/docker",
-                "docker compose up -d",
-                "EOL",
-                
-                "chmod +x /opt/dify/start.sh",
-                
-                # 自動起動の設定
-                "cat > /etc/systemd/system/dify.service << 'EOL'",
-                "[Unit]",
-                "Description=Dify AI Application",
-                "After=docker.service",
-                "Requires=docker.service",
-                "",
-                "[Service]",
-                "Type=oneshot",
-                "RemainAfterExit=yes",
-                "WorkingDirectory=/opt/dify",
-                "ExecStart=/opt/dify/start.sh",
-                "User=dify",
-                "Group=dify",
-                "",
-                "[Install]",
-                "WantedBy=multi-user.target",
-                "EOL",
-                
-                "systemctl enable dify.service",
-                "systemctl start dify.service"
-            )
-        
+
+        # 環境変数の設定
+        user_data.add_commands(
+            f"export admin_username='{self.config.linux_admin_username}'",
+            f"export admin_password='{self.config.linux_admin_password}'"
+        )
+
+        # ユーザーデータスクリプトの追加
+        user_data.add_commands(self._get_user_data_script())
+
         return user_data
+
+    def _get_user_data_script(self) -> str:
+        """
+        ユーザーデータスクリプトを取得
+
+        Returns:
+            ユーザーデータスクリプト文字列
+        """
+        return """
+#!/bin/bash
+# Difyインストール用Ubuntuユーザーデータスクリプト
+
+# エラーハンドリングの設定
+set -e
+set -o pipefail
+
+# ログ関数
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/user-data.log
+}
+
+# エラーハンドリング関数
+handle_error() {
+    log "ERROR: An error occurred on line $1"
+    exit 1
+}
+
+# エラートラップの設定
+trap 'handle_error $LINENO' ERR
+
+# スクリプト開始
+log "Starting Dify installation script..."
+
+# デフォルト値の設定
+admin_username=${admin_username:-ubuntu}
+admin_password=${admin_password:-P@ssw0rd123!}
+enable_cloudwatch_agent=${enable_cloudwatch_agent:-false}
+
+# ユーザーパスワード設定
+log "Setting ${admin_username} user password..."
+echo "${admin_username}:${admin_password}" | chpasswd
+
+# SSH設定
+log "Configuring SSH settings..."
+sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+systemctl restart sshd
+
+# システムの更新（コメントアウト）
+# log "Updating system packages..."
+# export DEBIAN_FRONTEND=noninteractive
+# apt-get update -y
+# apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+
+# 必要最小限のパッケージのインストール（DifyとDocker用）
+log "Installing required packages for Dify and Docker..."
+apt-get update -y
+apt-get install -y \\
+    apt-transport-https \\
+    ca-certificates \\
+    curl \\
+    gnupg \\
+    lsb-release \\
+    git
+
+# SSMエージェント状態確認（コメントアウト）
+# log "Checking SSM Agent status..."
+# if systemctl is-active --quiet amazon-ssm-agent; then
+#     log "SSM Agent is already running"
+#     systemctl status amazon-ssm-agent --no-pager | tee -a /var/log/user-data.log
+# else
+#     log "SSM Agent is not running, attempting to start..."
+#     systemctl start amazon-ssm-agent
+#     systemctl enable amazon-ssm-agent
+#     sleep 5
+#     if systemctl is-active --quiet amazon-ssm-agent; then
+#         log "SSM Agent started successfully"
+#     else
+#         log "ERROR: Failed to start SSM Agent"
+#     fi
+# fi
+
+# Session Manager Plugin のインストール（コメントアウト）
+# log "Checking if Session Manager Plugin is already installed..."
+# if ! command -v session-manager-plugin &> /dev/null; then
+#     log "Session Manager Plugin not found, installing..."
+#     curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+#     dpkg -i session-manager-plugin.deb
+#     rm -f session-manager-plugin.deb
+# fi
+
+# Dockerのインストール
+log "Installing Docker..."
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update -y
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Dockerサービスの開始と有効化
+systemctl start docker
+systemctl enable docker
+
+# ubuntuユーザーをdockerグループに追加
+usermod -aG docker ${admin_username}
+
+# Difyのインストール
+log "Installing Dify..."
+cd /opt
+
+# Difyのクローン
+git clone https://github.com/langgenius/dify.git dify
+cd dify/docker
+
+# 環境設定ファイルの作成
+log "Creating environment configuration..."
+cp .env.example .env
+
+# 基本的な設定を.envファイルに追加
+# 動的にIPアドレスを取得
+PRIVATE_IP=$(hostname -I | awk '{print $1}')
+SECRET_KEY_VALUE="dify_secret_key_$(openssl rand -hex 32)"
+
+cat >> .env << EOF
+# 基本設定
+EDITION=SELF_HOSTED
+CONSOLE_URL=http://${PRIVATE_IP}:3000
+API_URL=http://${PRIVATE_IP}:5001
+SERVICE_API_URL=http://${PRIVATE_IP}:5001
+APP_URL=http://${PRIVATE_IP}:3000
+
+# データベース設定
+DB_HOST=db
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=difyai123456
+DB_DATABASE=dify
+
+# Redis設定
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# ストレージ設定
+STORAGE_TYPE=local
+LOCAL_STORAGE_PATH=./storage
+
+# セキュリティ設定
+SECRET_KEY=${SECRET_KEY_VALUE}
+EOF
+
+# Docker ComposeでDifyを起動
+log "Starting Dify with Docker Compose..."
+docker compose up -d
+
+# データベースとRedisが起動するまで待機
+log "Waiting for database and Redis to be ready..."
+sleep 60
+
+# データベース接続テスト
+log "Testing database connection..."
+docker compose exec -T db pg_isready -U postgres || true
+
+# ファイアウォールの設定
+log "Configuring firewall..."
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 3000/tcp
+ufw allow 5001/tcp
+echo "y" | ufw enable
+
+# Difyアプリケーションが完全に起動するまで待機
+log "Waiting for Dify application to be fully ready..."
+sleep 30
+
+# Difyコンテナの状態確認
+log "Checking Dify containers status..."
+cd /opt/dify/docker && docker compose ps
+
+# エラーログがあれば表示
+log "Checking for any container errors..."
+cd /opt/dify/docker && docker compose logs --tail=20 | grep -i error || true
+
+# 簡単なステータス確認スクリプトを作成
+log "Creating status check script..."
+cat > /opt/dify/check_status.sh << 'EOF'
+#!/bin/bash
+echo "Difyコンテナステータス:"
+cd /opt/dify/docker && docker compose ps
+
+echo -e "\\nDifyアプリケーションURL:"
+echo "http://$(hostname -I | awk '{print $1}'):3000"
+
+echo -e "\\nシステム情報:"
+echo "Docker: $(docker --version)"
+echo "Docker Compose: $(docker compose version)"
+
+echo -e "\\nDifyログ（最新10行）:"
+cd /opt/dify/docker && docker compose logs --tail=10
+EOF
+
+chmod +x /opt/dify/check_status.sh
+
+# セットアップ完了
+log "Dify installation completed successfully!"
+log "System information:"
+log "Docker: $(docker --version)"
+log "Docker Compose: $(docker compose version)"
+
+# 完了をログに記録
+echo "Difyのインストールが正常に完了しました！" > /var/log/dify-setup.log
+echo "インストール完了時刻: $(date)" >> /var/log/dify-setup.log
+echo "Difyアクセス先: http://$(hostname -I | awk '{print $1}'):3000" >> /var/log/dify-setup.log
+
+# 最終状態確認
+log "Final status check:"
+sleep 10
+cd /opt/dify/docker && docker compose ps | tee -a /var/log/user-data.log
+
+log "Dify installation script completed at $(date)"
+"""
