@@ -12,32 +12,7 @@
 
 詳細なアーキテクチャ図については、[付録](#付録)をご参照ください。
 
-## ディレクトリ構造
 
-```
-.
-├── README.md                      # プロジェクト説明
-├── app.py                         # CDKアプリケーションのエントリーポイント
-├── cdk.json                       # CDK設定ファイル
-├── requirements.txt               # Pythonの依存関係
-├── setup.py                       # セットアップスクリプト
-├── source.bat                     # Windowsでの環境設定（CDK自動生成）
-├── dify_cdk/                      # CDKスタック定義
-│   ├── __init__.py
-│   ├── dify_cdk_stack.py          # メインCDKスタック
-│   ├── constructs/                # 再利用可能なコンストラクト
-│   │   ├── __init__.py
-│   │   ├── network.py             # ネットワーク関連のリソース
-│   │   ├── security.py            # セキュリティグループなど
-│   │   ├── windows_instance.py    # Windows VMの定義
-│   │   └── linux_instance.py      # Linux VMの定義
-│   └── config/                    # 設定ファイル
-│       ├── __init__.py
-│       └── config.py              # 環境設定
-└── scripts/                       # ユーザーデータスクリプト
-    ├── user_data_windows.ps1      # Windows VM初期化スクリプト
-    └── user_data_ubuntu.sh        # Linux VM初期化スクリプト（Difyセットアップ含む）
-```
 
 ## 前提条件
 
@@ -329,3 +304,32 @@ http://localhost:18080
 - セッションを終了するには、`Ctrl+C` を押してください
 - ローカルポート番号は任意の使用可能なポート番号に変更できます
 - 複数のセッションを同時に実行する場合は、異なるローカルポート番号を使用してください
+
+### ディレクトリ構造
+
+```
+.
+├── README.md                      # プロジェクト説明
+├── app.py                         # CDKアプリケーションのエントリーポイント
+├── cdk.context.json               # CDKコンテキスト設定
+├── cdk.json                       # CDK設定ファイル
+├── LICENSE                        # ライセンスファイル
+├── requirements.txt               # Pythonの依存関係
+├── setup.py                       # セットアップスクリプト
+├── source.bat                     # Windowsでの環境設定（CDK自動生成）
+├── dify_cdk/                      # CDKスタック定義
+│   ├── __init__.py
+│   ├── dify_cdk_stack.py          # メインCDKスタック
+│   ├── config/                    # 設定ファイル
+│   │   ├── __init__.py
+│   │   └── config.py              # 環境設定
+│   └── constructs/                # 再利用可能なコンストラクト
+│       ├── __init__.py
+│       ├── linux_instance.py     # Linux VMの定義
+│       ├── network.py             # ネットワーク関連のリソース
+│       ├── security.py            # セキュリティグループなど
+│       └── windows_instance.py   # Windows VMの定義
+└── images/                        # アーキテクチャ図ファイル
+    ├── gen1.drawio               # 第1世代アーキテクチャ図
+    └── gen2.drawio               # 第2世代アーキテクチャ図
+```
