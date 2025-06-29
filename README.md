@@ -60,34 +60,38 @@ source .venv/bin/activate  # Linuxの場合
 pip install -r requirements.txt
 ```
 
-3. 認証情報の設定
+3. 環境変数の設定
 
-   VMのログイン認証情報を設定するため、`credentials.json`ファイルを作成してください：
+   VMのログイン認証情報とその他の設定を`.env`ファイルで管理します：
 
    ```bash
-   cp credentials.example.json credentials.json
+   cp .env.example .env
    ```
 
-   `credentials.json`ファイルを編集して、実際のユーザー名とパスワードを設定してください：
+   `.env`ファイルを編集して、実際の値を設定してください：
 
-   ```json
-   {
-     "windows": {
-       "admin_username": "Administrator",
-       "admin_password": "YOUR_SECURE_WINDOWS_PASSWORD"
-     },
-     "linux": {
-       "admin_username": "ubuntu",
-       "admin_password": "YOUR_SECURE_LINUX_PASSWORD"
-     }
-   }
+   ```bash
+   # VM認証情報
+   WINDOWS_ADMIN_USERNAME=Administrator
+   WINDOWS_ADMIN_PASSWORD=YOUR_SECURE_WINDOWS_PASSWORD
+   LINUX_ADMIN_USERNAME=ubuntu
+   LINUX_ADMIN_PASSWORD=YOUR_SECURE_LINUX_PASSWORD
+
+   # プロジェクト設定
+   APP_NAME=dify
+   ENV_NAME=dev
+
+   # インフラストラクチャ設定（オプション）
+   VPC_CIDR=10.0.0.0/16
+   WINDOWS_INSTANCE_TYPE=t3.medium
+   LINUX_INSTANCE_TYPE=t3.large
    ```
 
-   **注意**: `credentials.json`ファイルは機密情報を含むため、Gitリポジトリにコミットされません。
+   **注意**: `.env`ファイルは機密情報を含むため、Gitリポジトリにコミットされません。
 
-   **環境変数による認証情報の上書き**
+   **システム環境変数の使用**
 
-   環境変数を使用して認証情報を上書きすることも可能です：
+   `.env`ファイルの代わりに、システムの環境変数を直接設定することも可能です：
 
    ```bash
    export WINDOWS_ADMIN_USERNAME="Administrator"
@@ -132,9 +136,9 @@ cdk deploy
 
 ### 設定ファイルでの変更（推奨）
 
-VMのパスワードを変更する最も簡単な方法は、`credentials.json`ファイルを更新することです：
+VMのパスワードを変更する最も簡単な方法は、`.env`ファイルを更新することです：
 
-1. `credentials.json`ファイルを編集してパスワードを変更
+1. `.env`ファイルを編集してパスワードを変更
 2. CDKスタックを再デプロイ：`cdk deploy`
 
 ### 環境変数での変更
@@ -172,8 +176,8 @@ sudo passwd ubuntu
 - このインフラストラクチャは、インターネットからの直接アクセスを許可していません
 - Difyへのアクセスは、VPC内のリソースからのみ可能です
 - 複数環境のデプロイには、`cdk.context.json`ファイルでスタック名やタグを変更してください
-- パスワードは`credentials.json`ファイルに平文で保存されるため、本番環境では適切なシークレット管理（AWS Secrets Manager等）を検討してください
-- `credentials.json`ファイルは機密情報を含むため、適切なファイル権限を設定し、バージョン管理システムにコミットしないでください
+- パスワードは`.env`ファイルに平文で保存されるため、本番環境では適切なシークレット管理（AWS Secrets Manager等）を検討してください
+- `.env`ファイルは機密情報を含むため、適切なファイル権限を設定し、バージョン管理システムにコミットしないでください
 
 ## 付録
 
