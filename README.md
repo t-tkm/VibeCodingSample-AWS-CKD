@@ -6,7 +6,7 @@
 
 このプロジェクトでは、以下の構成でDifyアプリケーションをAWS上にデプロイします：
 
-- **Windows Server**: 管理用サーバー（日本語版Windows Server 2022）
+- **Windows Server**: 管理用サーバー（日本語版Windows Server 2019）
 - **Linux Server**: Dify実行環境（Ubuntu 22.04、Docker Compose使用）
 - **セキュアアクセス**: AWS Systems Manager Fleet Managerを使用したVPC内接続
 
